@@ -43,6 +43,14 @@ export default function RootLayout() {
             name="lead/edit/[id]"
             options={{ animation: 'slide_from_right' }}
           />
+          <Stack.Screen name="product/[id]" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="product/new" options={{ animation: 'slide_from_bottom' }} />
+          <Stack.Screen
+            name="product/edit/[id]"
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen name="invoice/[id]" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="invoice/create" options={{ animation: 'slide_from_bottom' }} />
         </Stack>
         <Toast />
       </PaperProvider>
