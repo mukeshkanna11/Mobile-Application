@@ -111,8 +111,8 @@ export default function ProductForm({
         />
         <FormField
           label="Stock Quantity"
-          value={form.stock}
-          onChangeText={(t) => set('stock', t)}
+          value={form.stockQuantity}
+          onChangeText={(t) => set('stockQuantity', t)}
           placeholder="0"
           keyboardType="numeric"
         />

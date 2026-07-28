@@ -25,7 +25,7 @@ export interface Product {
   category?: string;
   price: number;
   tax?: number;
-  stock?: number;
+  stockQuantity?: number;
   status?: string;
   description?: string;
   image?: string;
@@ -40,7 +40,7 @@ export interface ProductInput {
   category: string;
   price: string;
   tax: string;
-  stock: string;
+  stockQuantity: string;
   status: ProductStatus;
   description: string;
 }
@@ -51,7 +51,7 @@ export const emptyProduct: ProductInput = {
   category: '',
   price: '',
   tax: '',
-  stock: '',
+  stockQuantity: '',
   status: 'Active',
   description: '',
 };
@@ -67,7 +67,7 @@ function toPayload(input: ProductInput) {
   return {
     ...input,
     price: Number(input.price) || 0,
-    stock: Number(input.stock) || 0,
+    stockQuantity: Number(input.stockQuantity) || 0,
     tax: Number(input.tax) || 0,
   };
 }
@@ -111,7 +111,10 @@ export function toProductInput(p: Product): ProductInput {
     category: p.category ?? '',
     price: p.price !== undefined && p.price !== null ? String(p.price) : '',
     tax: p.tax !== undefined && p.tax !== null ? String(p.tax) : '',
-    stock: p.stock !== undefined && p.stock !== null ? String(p.stock) : '',
+    stockQuantity:
+      p.stockQuantity !== undefined && p.stockQuantity !== null
+        ? String(p.stockQuantity)
+        : '',
     status: (p.status as ProductStatus) || 'Active',
     description: p.description ?? '',
   };
@@ -148,16 +151,16 @@ export function filterProducts(
     )
     .filter((p) => (f.category === 'All' ? true : p.category === f.category))
     .filter((p) => (f.status === 'All' ? true : (p.status || 'Active') === f.status))
-    .filter((p) => (f.stock === 'All' ? true : stockLevel(p.stock) === f.stock));
+    .filter((p) => (f.stock === 'All' ? true : stockLevel(p.stockQuantity) === f.stock));
 }
 
 /** KPI insights (identical formulas to the web page). */
 export function productStats(products: Product[]) {
   const total = products.length;
   const active = products.filter((p) => (p.status || 'Active') === 'Active').length;
-  const lowStock = products.filter((p) => (Number(p.stock) || 0) <= 5).length;
+  const lowStock = products.filter((p) => (Number(p.stockQuantity) || 0) <= 5).length;
   const inventoryValue = products.reduce(
-    (sum, p) => sum + (Number(p.price) || 0) * (Number(p.stock) || 0),
+    (sum, p) => sum + (Number(p.price) || 0) * (Number(p.stockQuantity) || 0),
     0
   );
   return { total, active, lowStock, inventoryValue };

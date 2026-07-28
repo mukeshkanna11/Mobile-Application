@@ -16,7 +16,7 @@ export default function ProductCard({
   product: Product;
   onPress?: () => void;
 }) {
-  const stock = Number(product.stock) || 0;
+  const stock = Number(product.stockQuantity) || 0;
   const lowOrOut = stock <= 5;
   const isActive = (product.status || 'Active') === 'Active';
 
@@ -63,7 +63,7 @@ export default function ProductCard({
           text={lowOrOut ? 'text-red-700' : 'text-emerald-700'}
         />
         <Badge
-          label={stockLevel(product.stock)}
+          label={stockLevel(product.stockQuantity)}
           bg="bg-slate-100"
           text="text-slate-600"
         />

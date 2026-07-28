@@ -33,6 +33,7 @@ export interface DashboardData {
   products: number;
   inventory: number;
   invoices: number;
+  opportunities: number;
   revenue: number;
   activities: Activity[];
 }
@@ -45,15 +46,25 @@ function asArray<T>(payload: unknown): T[] {
 }
 
 export async function fetchDashboard(): Promise<DashboardData> {
-  const [clientsRes, productsRes, inventoryRes, invoicesRes, activitiesRes] =
-    await Promise.allSettled([
-      API.get('/clients'),
-      API.get('/products'),
-      API.get('/inventory'),
-      API.get('/invoices'),
-      API.get('/activities', { params: { limit: 6 } }),
-    ]);
-
+  const [
+  clientsRes,
+  productsRes,
+  inventoryRes,
+  invoicesRes,
+  activitiesRes,
+  opportunitiesRes,
+] = await Promise.allSettled([
+  API.get('/clients'),
+  API.get('/products'),
+  API.get('/inventory'),
+  API.get('/invoices'),
+  API.get('/activities', { params: { limit: 6 } }),
+  API.get('/opportunities'),
+]);
+const opportunities =
+  opportunitiesRes.status === 'fulfilled'
+    ? asArray(opportunitiesRes.value.data)
+    : [];
   const clients =
     clientsRes.status === 'fulfilled' ? asArray(clientsRes.value.data) : [];
   const products =
@@ -77,11 +88,12 @@ export async function fetchDashboard(): Promise<DashboardData> {
   );
 
   return {
-    clients: clients.length,
-    products: products.length,
-    inventory: inventory.length,
-    invoices: invoices.length,
-    revenue,
-    activities,
-  };
+  clients: clients.length,
+  products: products.length,
+  inventory: inventory.length,
+  invoices: invoices.length,
+  opportunities: opportunities.length,
+  revenue,
+  activities,
+};
 }

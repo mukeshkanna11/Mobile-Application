@@ -86,7 +86,7 @@ export default function ProductDetailsScreen() {
     );
   }, [id, product]);
 
-  const stock = Number(product?.stock) || 0;
+  const stock = Number(product?.stockQuantity) || 0;
   const isActive = (product?.status || 'Active') === 'Active';
 
   return (
@@ -185,7 +185,7 @@ export default function ProductDetailsScreen() {
           <View className="mt-4 flex-row items-center gap-2">
             <Text className="text-xs text-slate-500">Availability:</Text>
             <Badge
-              label={stockLevel(product.stock)}
+              label={stockLevel(product.stockQuantity)}
               bg={stock <= 5 ? 'bg-red-100' : 'bg-emerald-100'}
               text={stock <= 5 ? 'text-red-700' : 'text-emerald-700'}
             />

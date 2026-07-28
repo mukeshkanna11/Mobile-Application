@@ -1,5 +1,7 @@
 import '@/global.css';
 
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
+import { useFonts } from 'expo-font';
 import { Stack } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -20,9 +22,21 @@ const paperTheme = {
 };
 
 export default function RootLayout() {
+  // Preload the icon fonts the app uses (Feather via @expo/vector-icons and
+  // MaterialCommunityIcons via react-native-paper). This awaits/handles the
+  // load instead of letting an icon trigger a lazy, uncaught web font load —
+  // which was surfacing as the fontfaceobserver "12000ms timeout" error.
+  const [fontsReady, fontError] = useFonts({
+    ...Feather.font,
+    ...MaterialCommunityIcons.font,
+  });
+
   useEffect(() => {
-    SplashScreen.hideAsync();
-  }, []);
+    if (fontsReady || fontError) SplashScreen.hideAsync();
+  }, [fontsReady, fontError]);
+
+  // Don't block forever if a web font stalls: proceed on load OR error.
+  if (!fontsReady && !fontError) return null;
 
   return (
     <SafeAreaProvider>

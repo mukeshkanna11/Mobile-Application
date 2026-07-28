@@ -1,7 +1,8 @@
 import { Feather } from '@expo/vector-icons';
 import { Pressable, Text, View } from 'react-native';
+import type { ComponentProps } from 'react';
 
-type FeatherName = keyof typeof Feather.glyphMap;
+type FeatherName = ComponentProps<typeof Feather>['name'];
 
 interface QuickActionProps {
   label: string;
@@ -10,8 +11,15 @@ interface QuickActionProps {
   onPress?: () => void;
 }
 
+
 /**
- * Square shortcut button used in the dashboard "Quick Actions" row.
+ * Dashboard Quick Action Button
+ * 
+ * Examples:
+ * Add Client
+ * New Invoice
+ * Add Product
+ * Stock In
  */
 export default function QuickAction({
   label,
@@ -19,20 +27,60 @@ export default function QuickAction({
   color,
   onPress,
 }: QuickActionProps) {
+
   return (
+
     <Pressable
+
       onPress={onPress}
-      className="flex-1 items-center gap-2 rounded-2xl border border-slate-100 bg-white p-4 shadow-sm active:opacity-80"
+
+      className="items-center flex-1 p-4 bg-white border  rounded-2xl border-slate-100 active:opacity-80"
+
     >
+
+
+      {/* ICON */}
+
       <View
-        className="h-11 w-11 items-center justify-center rounded-full"
-        style={{ backgroundColor: `${color}1A` }}
+
+        className="items-center justify-center rounded-full  h-11 w-11"
+
+        style={{
+          backgroundColor: `${color}1A`,
+        }}
+
       >
-        <Feather name={icon} size={20} color={color} />
+
+        <Feather
+
+          name={icon}
+
+          size={20}
+
+          color={color}
+
+        />
+
       </View>
-      <Text className="text-center text-xs font-medium text-slate-700">
+
+
+
+
+      {/* LABEL */}
+
+      <Text
+
+        className="mt-2 text-xs font-medium text-center  text-slate-700"
+
+      >
+
         {label}
+
       </Text>
+
+
     </Pressable>
+
   );
+
 }
