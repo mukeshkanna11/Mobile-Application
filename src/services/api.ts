@@ -17,10 +17,18 @@ const API = axios.create({
 });
 
 API.interceptors.request.use(async (config) => {
+
+  console.log(
+    "REQUEST URL:",
+    config.baseURL + config.url
+  );
+
   const token = await getItem(StorageKeys.token);
+
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
+
   return config;
 });
 

@@ -19,7 +19,7 @@ import FeatureCard from '@/components/ui/FeatureCard';
 import GradientBackground from '@/components/ui/GradientBackground';
 import InputField from '@/components/ui/InputField';
 import PrimaryButton from '@/components/ui/PrimaryButton';
-import { ADMIN_EMAIL } from '@/constants/config';
+import { ADMIN_EMAIL, API_URL } from '@/constants/config';
 import {
   clearRememberedPassword,
   getRememberedPassword,
@@ -81,10 +81,14 @@ export default function LoginScreen() {
 
       router.replace('/dashboard');
     } catch (err: any) {
+      // Distinguish a real 401 from a transport failure — without this, a blocked
+      // request reads as "bad password" and sends you hunting the wrong bug.
       Toast.show({
         type: 'error',
         text1: 'Login failed',
-        text2: err?.response?.data?.message ?? 'Please check your credentials',
+        text2: err?.response
+          ? (err.response.data?.message ?? `HTTP ${err.response.status}`)
+          : `Cannot reach ${API_URL} (${err?.message ?? 'network error'})`,
       });
     } finally {
       setLoading(false);
