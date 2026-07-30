@@ -42,14 +42,18 @@ export default function TabsLayout() {
         options={{ title: 'Products', tabBarIcon: tabIcon('package') }}
       />
       <Tabs.Screen
-        name="contacts"
-        options={{ title: 'Contacts', tabBarIcon: tabIcon('phone') }}
+        name="users"
+        options={{ title: 'Users', tabBarIcon: tabIcon('user-check') }}
       />
       <Tabs.Screen
         name="invoices"
         options={{ title: 'Invoices', tabBarIcon: tabIcon('file-text') }}
       />
-     
+      <Tabs.Screen
+        name="more"
+        options={{ title: 'More', tabBarIcon: tabIcon('grid') }}
+      />
+
     </Tabs>
   );
 }

@@ -1,6 +1,6 @@
 import { Feather } from '@expo/vector-icons';
-import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 import type { ComponentProps } from 'react';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 type FeatherName = ComponentProps<typeof Feather>['name'];
 
@@ -29,6 +29,11 @@ interface StatCardProps {
   onPress?: () => void;
 }
 
+/**
+ * Fixed height so every tile in the KPI grid lines up, whether it holds a
+ * single digit ("6") or a wrapped currency string ("₹1,23,456").
+ */
+const CARD_HEIGHT = 124;
 
 /**
  * Dashboard KPI Metric Card
@@ -49,83 +54,40 @@ export default function StatCard({
   loading = false,
   onPress,
 }: StatCardProps) {
-
   return (
-
     <Pressable
-
       onPress={onPress}
-
-      className="flex-1 p-4 bg-white border  rounded-2xl border-slate-100 active:opacity-80"
-
+      disabled={!onPress}
+      style={{ height: CARD_HEIGHT }}
+      className="w-full justify-between rounded-2xl border border-slate-100 bg-white p-4 shadow-sm active:opacity-80"
     >
-
-
       {/* ICON */}
-
       <View
-        className={`
-          h-10
-          w-10
-          items-center
-          justify-center
-          rounded-xl
-          ${tint}
-        `}
+        className={`h-10 w-10 items-center justify-center rounded-xl ${tint}`}
       >
-
-        <Feather
-          name={icon}
-          size={20}
-          color={iconColor}
-        />
-
+        <Feather name={icon} size={20} color={iconColor} />
       </View>
 
+      <View>
+        {/* VALUE — shrinks to fit so long currency never wraps or clips */}
+        {loading ? (
+          <ActivityIndicator className="mb-1 self-start" color={iconColor} />
+        ) : (
+          <Text
+            numberOfLines={1}
+            adjustsFontSizeToFit
+            minimumFontScale={0.7}
+            className="text-2xl font-bold text-slate-900"
+          >
+            {value}
+          </Text>
+        )}
 
-
-
-      {/* VALUE */}
-
-      {
-        loading ?
-
-        <ActivityIndicator
-
-          className="self-start mt-3 "
-
-          color={iconColor}
-
-        />
-
-        :
-
-        <Text
-          className="mt-3 text-2xl font-bold  text-slate-900"
-        >
-
-          {value}
-
+        {/* LABEL */}
+        <Text numberOfLines={1} className="mt-0.5 text-sm text-slate-500">
+          {label}
         </Text>
-
-      }
-
-
-
-
-      {/* LABEL */}
-
-      <Text
-        className="mt-1 text-sm  text-slate-500"
-      >
-
-        {label}
-
-      </Text>
-
-
+      </View>
     </Pressable>
-
   );
-
 }

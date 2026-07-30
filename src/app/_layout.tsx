@@ -63,6 +63,29 @@ export default function RootLayout() {
             name="product/edit/[id]"
             options={{ animation: 'slide_from_right' }}
           />
+          <Stack.Screen name="user/[id]" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen name="user/new" options={{ animation: 'slide_from_bottom' }} />
+          <Stack.Screen
+            name="user/edit/[id]"
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen name="salesforce/index" options={{ animation: 'slide_from_right' }} />
+          <Stack.Screen
+            name="salesforce/dashboard"
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="salesforce/activities"
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="administration/index"
+            options={{ animation: 'slide_from_right' }}
+          />
+          <Stack.Screen
+            name="administration/audit-logs"
+            options={{ animation: 'slide_from_right' }}
+          />
           <Stack.Screen name="invoice/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="invoice/create" options={{ animation: 'slide_from_bottom' }} />
         </Stack>

@@ -12,9 +12,7 @@ import { Platform } from "react-native";
 
 export const API_URL =
   process.env.EXPO_PUBLIC_API_URL ??
-  (Platform.OS === "web"
-    ? "http://localhost:5000/api"
-    : "http://192.168.0.101:5000/api");
+  "https://readytech-crm-dashboard.onrender.com/api";
 
 /** Fixed admin account (mirrors the web login). */
-export const ADMIN_EMAIL = 'siva@readytechsolutions.in';
+export const ADMIN_EMAIL = "siva@readytechsolutions.in";
