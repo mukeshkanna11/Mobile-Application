@@ -31,7 +31,7 @@ export default function RootLayout() {
     ...MaterialCommunityIcons.font,
   });
 
-  useEffect(() => {
+  useEffect(() => { 
     if (fontsReady || fontError) SplashScreen.hideAsync();
   }, [fontsReady, fontError]);
 
