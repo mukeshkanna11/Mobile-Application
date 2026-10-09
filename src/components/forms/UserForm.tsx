@@ -9,18 +9,29 @@ import {
 } from 'react-native';
 import Toast from 'react-native-toast-message';
 
+import DateField from '@/components/ui/DateField';
 import FormField from '@/components/ui/FormField';
 import PrimaryButton from '@/components/ui/PrimaryButton';
+import SearchablePicker from '@/components/ui/SearchablePicker';
 import Segmented from '@/components/ui/Segmented';
 import {
+  DEPARTMENTS,
+  designationsFor,
   emptyUser,
   USER_STATUSES,
   userErrorMessage,
+  validateUser,
   type UserInput,
   type UserStatus,
 } from '@/services/users';
 
-const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const toOptions = (values: readonly string[]) => values.map((v) => ({ label: v, value: v }));
+
+const PASSWORD_FIELDS = [
+  { key: 'currentPassword', label: 'Old Password' },
+  { key: 'newPassword', label: 'New Password' },
+  { key: 'confirmPassword', label: 'Confirm New Password' },
+] as const;
 
 /** Web <select> option labels, mapped to the lowercase values the API stores. */
 const ROLE_OPTIONS = ['Admin', 'Employee', 'Client'] as const;
@@ -53,18 +64,8 @@ export default function UserForm({
   const set = <K extends keyof UserInput>(key: K, value: UserInput[K]) =>
     setForm((f) => ({ ...f, [key]: value }));
 
-  const validate = (): string | null => {
-    if (!form.name.trim()) return 'Full name is required';
-    if (!form.email.trim()) return 'Email address is required';
-    if (!EMAIL_RE.test(form.email.trim()))
-      return 'Enter a valid email address';
-    // Web: `if (!editingId && !form.password) toast.error("Password is required")`
-    if (!isEdit && !form.password) return 'Password is required';
-    return null;
-  };
-
   const handleSave = async () => {
-    const err = validate();
+    const err = validateUser(form, isEdit);
     if (err) {
       Toast.show({ type: 'error', text1: err });
       return;
@@ -115,20 +116,61 @@ export default function UserForm({
           autoCapitalize="none"
           autoCorrect={false}
         />
-        <FormField
-          label="Password"
-          required={!isEdit}
-          value={form.password}
-          onChangeText={(t) => set('password', t)}
-          placeholder={
-            isEdit
-              ? 'Leave blank to keep existing password'
-              : 'Create secure password'
-          }
-          secureTextEntry
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+        {/* Web shows the password field only when creating a user. */}
+        {!isEdit && (
+          <FormField
+            label="Password"
+            required
+            value={form.password}
+            onChangeText={(t) => set('password', t)}
+            placeholder="Create secure password"
+            secureTextEntry
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+        )}
+
+        {/* Employment Details — department filters the designation list */}
+        <View className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+          <Text className="mb-3 text-sm font-semibold text-slate-700">
+            Employment Details
+          </Text>
+
+          <SearchablePicker
+            label="Department"
+            required
+            placeholder="Select Department"
+            value={form.department}
+            options={toOptions(DEPARTMENTS)}
+            onSelect={(v) => setForm((f) => ({ ...f, department: v, designation: '' }))}
+          />
+          <SearchablePicker
+            label="Designation"
+            required
+            placeholder={form.department ? 'Select Designation' : 'Select department first'}
+            value={form.designation}
+            options={form.department ? toOptions(designationsFor(form.department)) : []}
+            onSelect={(v) => set('designation', v)}
+          />
+          <FormField
+            label="Company"
+            value={form.company}
+            onChangeText={(t) => set('company', t)}
+            placeholder="Company"
+          />
+          <FormField
+            label="Employee ID"
+            value={form.employeeId}
+            onChangeText={(t) => set('employeeId', t)}
+            placeholder="Employee ID"
+            autoCapitalize="characters"
+          />
+          <DateField
+            label="Joining Date"
+            value={form.joiningDate}
+            onChange={(d) => set('joiningDate', d)}
+          />
+        </View>
 
         {/* Access Control — the web drawer's role + status selects */}
         <View className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
@@ -150,6 +192,27 @@ export default function UserForm({
             onChange={(v) => set('status', v as UserStatus)}
           />
         </View>
+
+        {/* Change Password — optional, submitted by the same button */}
+        {isEdit && (
+          <View className="mb-4 rounded-2xl border border-slate-200 bg-slate-50 p-4">
+            <Text className="text-sm font-semibold text-slate-700">Change Password</Text>
+            <Text className="mb-3 mt-1 text-xs text-slate-500">
+              Leave blank to keep your current password.
+            </Text>
+            {PASSWORD_FIELDS.map((f) => (
+              <FormField
+                key={f.key}
+                label={f.label}
+                value={form[f.key]}
+                onChangeText={(t) => set(f.key, t)}
+                secureTextEntry
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            ))}
+          </View>
+        )}
 
         {/* Security note (web's indigo callout) */}
         <View className="mb-4 flex-row items-start gap-2 rounded-2xl border border-indigo-100 bg-indigo-50 p-4">

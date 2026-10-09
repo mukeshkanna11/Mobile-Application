@@ -21,6 +21,7 @@ import { LoadingState, MessageState } from '@/components/ui/StateView';
 import {
   fetchProducts,
   filterProducts,
+  categorySummary,
   productStats,
   type Product,
   type ProductFilters,
@@ -91,6 +92,7 @@ export default function ProductsScreen() {
   }, [hasMore]);
 
   const stats = useMemo(() => productStats(products), [products]);
+  const categories = useMemo(() => categorySummary(products), [products]);
 
   const filtersActive =
     search !== '' || category !== 'All' || status !== 'All' || stock !== 'All';
@@ -157,7 +159,7 @@ export default function ProductsScreen() {
           <Feather name="search" size={18} color="#94a3b8" />
           <TextInput
             className="flex-1 py-2.5 pl-2 text-base text-slate-800"
-            placeholder="Search by name, SKU or category…"
+            placeholder="Search name, SKU, category or barcode…"
             placeholderTextColor="#94a3b8"
             value={search}
             onChangeText={(t) => {
@@ -182,6 +184,37 @@ export default function ProductsScreen() {
         </View>
 
         {/* Collapsible filters */}
+        {/* Category insights (web "Enterprise Category Insights") — tap to filter */}
+        {categories.length > 0 && (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            className="mt-3"
+            contentContainerStyle={{ gap: 8 }}
+          >
+            {categories.map(([cat, count]) => {
+              const active = category === cat;
+              return (
+                <Pressable
+                  key={cat}
+                  onPress={() => {
+                    setCategory(active ? 'All' : cat);
+                    resetPage();
+                  }}
+                  className={`rounded-2xl border px-3 py-2 ${
+                    active ? 'border-indigo-600 bg-indigo-600' : 'border-slate-200 bg-white'
+                  }`}
+                >
+                  <Text className={`text-xs font-semibold ${active ? 'text-white' : 'text-slate-700'}`}>{cat}</Text>
+                  <Text className={`text-[11px] ${active ? 'text-indigo-100' : 'text-slate-500'}`}>
+                    {count} {count === 1 ? 'product' : 'products'}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        )}
+
         {showFilters && (
           <View className="mt-3 rounded-2xl border border-slate-100 bg-white p-4">
             <View className="mb-2 flex-row items-center gap-2">

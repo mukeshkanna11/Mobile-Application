@@ -3,6 +3,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -11,6 +12,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
 
 import ClientCard from '@/components/ui/ClientCard';
 import EnterpriseHeader, { HeaderAction } from '@/components/ui/EnterpriseHeader';
@@ -18,6 +20,7 @@ import KpiCard from '@/components/ui/KpiCard';
 import Segmented from '@/components/ui/Segmented';
 import { LoadingState, MessageState } from '@/components/ui/StateView';
 import {
+  deleteClient,
   fetchClients,
   filterClients,
   type Client,
@@ -67,6 +70,27 @@ export default function ClientsScreen() {
   }, [load]);
 
   const resetPage = () => setPage(1);
+
+  const removeClient = useCallback(
+    (client: Client) =>
+      Alert.alert('Delete client', 'Delete this client permanently?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteClient(client._id);
+              Toast.show({ type: 'success', text1: 'Client removed' });
+              load();
+            } catch {
+              Toast.show({ type: 'error', text1: 'Delete failed' });
+            }
+          },
+        },
+      ]),
+    [load]
+  );
 
   const filtered = useMemo(
     () => filterClients(clients, { search, status, type }),
@@ -269,6 +293,13 @@ export default function ClientsScreen() {
                   params: { id: item._id },
                 })
               }
+              onEdit={() =>
+                router.push({
+                  pathname: '/client/edit/[id]',
+                  params: { id: item._id },
+                })
+              }
+              onDelete={() => removeClient(item)}
             />
           )}
           refreshControl={

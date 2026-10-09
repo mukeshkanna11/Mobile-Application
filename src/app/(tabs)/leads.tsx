@@ -3,6 +3,7 @@ import { router, useFocusEffect } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -20,9 +21,13 @@ import LeadCard from '@/components/ui/LeadCard';
 import Segmented from '@/components/ui/Segmented';
 import { LoadingState, MessageState } from '@/components/ui/StateView';
 import {
+  deleteLead,
   fetchLeads,
   filterLeads,
-  updateLead,
+  LEAD_PRIORITIES,
+  LEAD_STATUS_OPTIONS,
+  leadStats,
+  updateLeadStatus,
   type Lead,
   type LeadFilters,
 } from '@/services/leads';
@@ -71,20 +76,40 @@ export default function LeadsScreen() {
   const resetPage = () => setPage(1);
 
   /* ===== Inline optimistic status update (matches web updateLeadStatus) ===== */
-  const changeStatus = useCallback(
-    async (lead: Lead, next: string) => {
-      if (lead.status === next) return;
-      setLeads((prev) =>
-        prev.map((l) => (l._id === lead._id ? { ...l, status: next } : l))
-      );
-      try {
-        await updateLead(lead._id, { ...lead, status: next });
-        Toast.show({ type: 'success', text1: `Moved to ${next}` });
-      } catch {
-        Toast.show({ type: 'error', text1: 'Status update failed' });
-        load(); // revert to server truth
-      }
-    },
+  const changeStatus = useCallback(async (lead: Lead, next: string) => {
+    if (lead.status === next) return;
+    const previous = lead.status;
+    const setStatusOf = (status: string) =>
+      setLeads((prev) => prev.map((l) => (l._id === lead._id ? { ...l, status } : l)));
+    setStatusOf(next);
+    try {
+      await updateLeadStatus(lead._id, next);
+      Toast.show({ type: 'success', text1: `Lead moved to ${next}` });
+    } catch (err: any) {
+      setStatusOf(previous); // rollback
+      Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Status update failed' });
+    }
+  }, []);
+
+  /* ===== Delete (web deleteLead: confirm, toast, refetch) ===== */
+  const removeLead = useCallback(
+    (lead: Lead) =>
+      Alert.alert('Delete lead', 'Are you sure you want to delete this lead?', [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await deleteLead(lead._id);
+              Toast.show({ type: 'success', text1: 'Lead deleted successfully' });
+              load();
+            } catch (err: any) {
+              Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Delete failed' });
+            }
+          },
+        },
+      ]),
     [load]
   );
 
@@ -109,13 +134,7 @@ export default function LeadsScreen() {
   }, [hasMore]);
 
   /* ===== KPIs (identical formulas to web) ===== */
-  const stats = useMemo(() => {
-    const total = leads.length;
-    const newLeads = leads.filter((l) => l.status === 'New').length;
-    const qualified = leads.filter((l) => l.status === 'Qualified').length;
-    const conversion = total ? Math.round((qualified / total) * 100) : 0;
-    return { total, newLeads, qualified, conversion };
-  }, [leads]);
+  const stats = useMemo(() => leadStats(leads), [leads]);
 
   const filtersActive =
     search !== '' || status !== 'All' || source !== 'All' || priority !== 'All';
@@ -236,7 +255,7 @@ export default function LeadsScreen() {
             </View>
             <Segmented
               label="Status"
-              options={['All', 'New', 'Contacted', 'Qualified', 'Closed']}
+              options={['All', ...LEAD_STATUS_OPTIONS]}
               value={status}
               onChange={(v) => {
                 setStatus(v);
@@ -246,7 +265,7 @@ export default function LeadsScreen() {
             />
             <Segmented
               label="Priority"
-              options={['All', 'High', 'Medium', 'Low']}
+              options={['All', ...LEAD_PRIORITIES]}
               value={priority}
               onChange={(v) => {
                 setPriority(v as LeadFilters['priority']);
@@ -325,6 +344,8 @@ export default function LeadsScreen() {
                 router.push({ pathname: '/lead/[id]', params: { id: item._id } })
               }
               onChangeStatus={(s) => changeStatus(item, s)}
+              onEdit={() => router.push({ pathname: '/lead/edit/[id]', params: { id: item._id } })}
+              onDelete={() => removeLead(item)}
             />
           )}
           refreshControl={

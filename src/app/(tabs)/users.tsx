@@ -188,7 +188,7 @@ export default function UsersScreen() {
           <Feather name="search" size={18} color="#94a3b8" />
           <TextInput
             className="flex-1 py-2.5 pl-2 text-base text-slate-800"
-            placeholder="Search users by name, email or role…"
+            placeholder="Search name, email, role, department…"
             placeholderTextColor="#94a3b8"
             value={search}
             onChangeText={(t) => {

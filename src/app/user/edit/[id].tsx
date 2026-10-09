@@ -42,14 +42,8 @@ export default function EditUserScreen() {
   }, [load]);
 
   const handleUpdate = async (values: UserInput) => {
-    await updateUser(id!, {
-      ...values,
-      name: values.name.trim(),
-      email: values.email.trim(),
-      department: values.department.trim(),
-      phone: values.phone.trim(),
-    });
-    Toast.show({ type: 'success', text1: 'User updated' });
+    await updateUser(id!, values);
+    Toast.show({ type: 'success', text1: 'User updated successfully' });
     router.back();
   };
 

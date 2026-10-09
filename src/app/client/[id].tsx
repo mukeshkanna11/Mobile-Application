@@ -12,13 +12,17 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 
+import AIInsightPanel from '@/components/ui/AIInsightPanel';
 import EnterpriseHeader, { HeaderAction } from '@/components/ui/EnterpriseHeader';
 import { LoadingState, MessageState } from '@/components/ui/StateView';
 import {
+  CLIENT_AI_FEATURES,
   deleteClient,
   fetchClient,
+  getClientInsight,
   type Address,
   type Client,
+  type ClientInsightType,
 } from '@/services/clients';
 
 type FeatherName = keyof typeof Feather.glyphMap;
@@ -34,10 +38,9 @@ function DetailRow({
   value?: string;
   onPress?: () => void;
 }) {
-  if (!value) return null;
   return (
     <Pressable
-      disabled={!onPress}
+      disabled={!onPress || !value}
       onPress={onPress}
       className="flex-row items-center gap-3 py-3"
     >
@@ -47,12 +50,12 @@ function DetailRow({
       <View className="flex-1">
         <Text className="text-xs text-slate-400">{label}</Text>
         <Text
-          className={`text-sm ${onPress ? 'text-indigo-600' : 'text-slate-800'}`}
+          className={`text-sm ${onPress && value ? 'text-indigo-600' : 'text-slate-800'}`}
         >
-          {value}
+          {value || '—'}
         </Text>
       </View>
-      {onPress && <Feather name="external-link" size={16} color="#cbd5e1" />}
+      {onPress && value && <Feather name="external-link" size={16} color="#cbd5e1" />}
     </Pressable>
   );
 }
@@ -94,6 +97,7 @@ export default function ClientDetailsScreen() {
   const [error, setError] = useState(false);
 
   const [deleting, setDeleting] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -245,26 +249,19 @@ export default function ClientDetailsScreen() {
           contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
         >
-          <Section title="Contact">
+          <Section title="Contact Information">
+            <DetailRow icon="user" label="Contact Person" value={client.contactPerson} />
             <DetailRow
               icon="mail"
               label="Email"
               value={client.email}
-              onPress={
-                client.email
-                  ? () => Linking.openURL(`mailto:${client.email}`)
-                  : undefined
-              }
+              onPress={client.email ? () => Linking.openURL(`mailto:${client.email}`) : undefined}
             />
             <DetailRow
               icon="phone"
               label="Phone"
               value={client.phone}
-              onPress={
-                client.phone
-                  ? () => Linking.openURL(`tel:${client.phone}`)
-                  : undefined
-              }
+              onPress={client.phone ? () => Linking.openURL(`tel:${client.phone}`) : undefined}
             />
             <DetailRow
               icon="globe"
@@ -274,68 +271,50 @@ export default function ClientDetailsScreen() {
                 client.website
                   ? () =>
                       Linking.openURL(
-                        client.website!.startsWith('http')
-                          ? client.website!
-                          : `https://${client.website}`
+                        client.website!.startsWith('http') ? client.website! : `https://${client.website}`
                       )
                   : undefined
               }
             />
           </Section>
 
-          {(client.gstNumber || client.panNumber) && (
-            <Section title="Tax">
-              <DetailRow
-                icon="file-text"
-                label="GST Number"
-                value={client.gstNumber}
-              />
-              <DetailRow
-                icon="credit-card"
-                label="PAN Number"
-                value={client.panNumber}
-              />
-            </Section>
-          )}
+          <Section title="Business Information">
+            <DetailRow icon="briefcase" label="Company" value={client.companyName} />
+            <DetailRow icon="tag" label="Client Type" value={client.clientType} />
+            <DetailRow icon="file-text" label="GST Number" value={client.gstNumber} />
+            <DetailRow icon="credit-card" label="PAN Number" value={client.panNumber} />
+            <DetailRow icon="award" label="Current Plan" value={client.currentPlan} />
+            <DetailRow icon="refresh-cw" label="Subscription" value={client.subscriptionStatus} />
+          </Section>
 
-          {(formatAddress(client.billingAddress) ||
-            formatAddress(client.shippingAddress)) && (
-            <Section title="Addresses">
-              <DetailRow
-                icon="map-pin"
-                label="Billing"
-                value={formatAddress(client.billingAddress)}
-              />
-              <DetailRow
-                icon="truck"
-                label="Shipping"
-                value={formatAddress(client.shippingAddress)}
-              />
-            </Section>
-          )}
-
-          {(client.currentPlan || client.subscriptionStatus) && (
-            <Section title="Subscription">
-              <DetailRow
-                icon="award"
-                label="Current Plan"
-                value={client.currentPlan}
-              />
-              <DetailRow
-                icon="refresh-cw"
-                label="Status"
-                value={client.subscriptionStatus}
-              />
-            </Section>
-          )}
-
-          {client.notes ? (
-            <Section title="Notes">
-              <Text className="pb-4 pt-1 text-sm leading-relaxed text-slate-700">
-                {client.notes}
-              </Text>
+          {formatAddress(client.billingAddress) ? (
+            <Section title="Billing Address">
+              <DetailRow icon="map-pin" label="Address" value={formatAddress(client.billingAddress)} />
             </Section>
           ) : null}
+
+          <Section title="Client Notes">
+            <Text className="pb-4 pt-1 text-sm leading-relaxed text-slate-600">
+              {client.notes || 'No notes available'}
+            </Text>
+          </Section>
+
+          {aiOpen ? (
+            <AIInsightPanel
+              subtitle={client.companyName || client.contactPerson}
+              features={CLIENT_AI_FEATURES}
+              fetchInsight={(type) => getClientInsight(type as ClientInsightType, client)}
+              onClose={() => setAiOpen(false)}
+            />
+          ) : (
+            <Pressable
+              onPress={() => setAiOpen(true)}
+              className="mt-5 flex-row items-center justify-center rounded-2xl bg-indigo-600 py-3.5 active:opacity-90"
+            >
+              <Feather name="cpu" size={18} color="#fff" />
+              <Text className="ml-2 font-semibold text-white">Ask ReadyTech AI Assistant</Text>
+            </Pressable>
+          )}
         </ScrollView>
       )}
     </SafeAreaView>

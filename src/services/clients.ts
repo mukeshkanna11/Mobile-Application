@@ -143,6 +143,34 @@ export function toClientInput(c: Client): ClientInput {
   };
 }
 
+/** Web aiService CLIENT_AI_FEATURES — same types, labels and descriptions. */
+export const CLIENT_AI_FEATURES = [
+  { type: 'summary', label: 'Client Summary', description: 'Executive overview of this account', icon: 'file-text' },
+  { type: 'analytics', label: 'Customer Analytics', description: 'Health score, churn risk & signals', icon: 'activity' },
+  { type: 'communication', label: 'Communication', description: 'Draft outreach & talking points', icon: 'message-square' },
+  { type: 'followup', label: 'Next Follow-up', description: 'Best next action & message', icon: 'calendar' },
+  { type: 'upsell', label: 'Upsell / Cross-sell', description: 'Growth & expansion opportunities', icon: 'trending-up' },
+] as const;
+
+export type ClientInsightType = (typeof CLIENT_AI_FEATURES)[number]['type'];
+
+export interface ClientInsight {
+  success: boolean;
+  type: string;
+  label?: string;
+  insight: string;
+  model?: string;
+  generatedAt?: string;
+  message?: string;
+}
+
+/** POST /ai/client-insight — same call and failure rule as the web assistant. */
+export async function getClientInsight(type: ClientInsightType, client: Client): Promise<ClientInsight> {
+  const { data } = await API.post('/ai/client-insight', { type, client });
+  if (!data?.success) throw new Error(data?.message || 'Request failed');
+  return data as ClientInsight;
+}
+
 export interface ClientFilters {
   search: string;
   status: 'All' | ClientStatus;

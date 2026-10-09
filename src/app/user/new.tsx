@@ -8,18 +8,9 @@ import { createUser, type UserInput } from '@/services/users';
 
 export default function NewUserScreen() {
   const handleCreate = async (values: UserInput) => {
-    await createUser({
-      ...values,
-      name: values.name.trim(),
-      // Lowercased to match the schema's `lowercase: true`. The API's duplicate
-      // pre-check queries the raw string, so a mixed-case address would slip
-      // past it and fail on the unique index as an opaque 500 instead of a
-      // clean "Email already exists".
-      email: values.email.trim().toLowerCase(),
-      department: values.department.trim(),
-      phone: values.phone.trim(),
-    });
-    Toast.show({ type: 'success', text1: 'User created' });
+    // Trimming/lowercasing happens in toPayload(), same as the web saveUser().
+    await createUser(values);
+    Toast.show({ type: 'success', text1: 'User created successfully' });
     router.back();
   };
 

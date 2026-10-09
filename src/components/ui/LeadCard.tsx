@@ -6,7 +6,7 @@ import { Menu } from 'react-native-paper';
 
 import PriorityChip from '@/components/ui/PriorityChip';
 import StatusBadge from '@/components/ui/StatusBadge';
-import { LEAD_STATUSES, priorityOf, type Lead } from '@/services/leads';
+import { formatINR, LEAD_STATUS_OPTIONS, priorityOf, type Lead } from '@/services/leads';
 
 /**
  * Premium lead card — the mobile replacement for a web table row.
@@ -17,13 +17,17 @@ export default function LeadCard({
   lead,
   onPress,
   onChangeStatus,
+  onEdit,
+  onDelete,
 }: {
   lead: Lead;
   onPress?: () => void;
   onChangeStatus?: (status: string) => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const priority = priorityOf(lead.status);
+  const priority = priorityOf(lead);
   const initial = (lead.name || '?').charAt(0).toUpperCase();
 
   return (
@@ -102,7 +106,7 @@ export default function LeadCard({
             </Pressable>
           }
         >
-          {LEAD_STATUSES.map((s) => (
+          {LEAD_STATUS_OPTIONS.map((s) => (
             <Menu.Item
               key={s}
               title={s}
@@ -122,6 +126,37 @@ export default function LeadCard({
               {lead.source}
             </Text>
           </View>
+        ) : null}
+        {lead.isConverted ? (
+          <View className="rounded-full bg-emerald-50 px-2.5 py-1">
+            <Text className="text-xs font-semibold text-emerald-700">Converted</Text>
+          </View>
+        ) : null}
+      </View>
+
+      {/* Value / follow-up / created + row actions (web table columns) */}
+      <View className="mt-3 flex-row items-center border-t border-slate-100 pt-3">
+        <View className="flex-1">
+          <Text className="text-xs font-semibold text-slate-800">
+            {formatINR(lead.value)}
+            <Text className="font-normal text-slate-400"> · exp. {formatINR(lead.expectedValue)}</Text>
+          </Text>
+          <Text className="mt-0.5 text-[11px] text-slate-400" numberOfLines={1}>
+            {lead.nextFollowUpAt || lead.followUpDate
+              ? `Follow-up ${new Date((lead.nextFollowUpAt || lead.followUpDate)!).toLocaleDateString('en-IN')}`
+              : 'No follow-up'}
+            {lead.createdAt ? ` · Created ${new Date(lead.createdAt).toLocaleDateString()}` : ''}
+          </Text>
+        </View>
+        {onEdit ? (
+          <Pressable onPress={onEdit} hitSlop={6} className="ml-2 rounded-xl bg-slate-50 p-2 active:opacity-70">
+            <Feather name="edit-2" size={15} color="#475569" />
+          </Pressable>
+        ) : null}
+        {onDelete ? (
+          <Pressable onPress={onDelete} hitSlop={6} className="ml-2 rounded-xl bg-red-50 p-2 active:opacity-70">
+            <Feather name="trash-2" size={15} color="#dc2626" />
+          </Pressable>
         ) : null}
       </View>
     </Pressable>

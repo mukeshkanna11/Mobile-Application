@@ -17,19 +17,29 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 
+import AIInsightPanel from '@/components/ui/AIInsightPanel';
 import { DetailRow, Section } from '@/components/ui/DetailSection';
 import EnterpriseHeader, { HeaderAction } from '@/components/ui/EnterpriseHeader';
 import PriorityChip from '@/components/ui/PriorityChip';
 import { LoadingState, MessageState } from '@/components/ui/StateView';
+import StatusBadge from '@/components/ui/StatusBadge';
 import {
+  convertLead,
   deleteLead,
   fetchLead,
+  fetchLeadActivities,
+  formatDateTime,
+  formatINR,
+  getLeadInsight,
   isValidLeadPhone,
+  LEAD_AI_FEATURES,
   priorityOf,
   sendLeadMessage,
   type Lead,
+  type LeadActivity,
   type LeadMessageChannel,
 } from '@/services/leads';
+import { fetchUsers, type User } from '@/services/users';
 import {
   startLeadCall,
   type ActiveCall,
@@ -39,6 +49,7 @@ import {
 type FeatherName = keyof typeof Feather.glyphMap;
 
 const CHANNEL_LABEL: Record<LeadMessageChannel, string> = {
+  email: 'Email',
   sms: 'SMS',
   whatsapp: 'WhatsApp',
 };
@@ -78,6 +89,20 @@ function CommAction({
   );
 }
 
+/** Web activity timeline icon per activity type. */
+const ACTIVITY_ICON: Record<string, FeatherName> = {
+  call: 'phone',
+  email: 'mail',
+  'follow-up': 'clock',
+  followup: 'clock',
+  meeting: 'users',
+  task: 'check-square',
+  sms: 'message-square',
+  whatsapp: 'message-circle',
+};
+
+const orDash = (v?: string | number | null) => (v === undefined || v === null || v === '' ? '—' : String(v));
+
 function StatChip({ label, value }: { label: string; value: string }) {
   return (
     <View className="flex-1 items-center rounded-2xl border border-slate-100 bg-white p-4 shadow-sm">
@@ -95,10 +120,16 @@ export default function LeadDetailsScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [converting, setConverting] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
+  const [activities, setActivities] = useState<LeadActivity[]>([]);
+  const [activitiesLoading, setActivitiesLoading] = useState(false);
+  const [users, setUsers] = useState<User[]>([]);
 
   // Communications: SMS / WhatsApp composer + Twilio Voice call
   const [channel, setChannel] = useState<LeadMessageChannel | null>(null);
   const [draft, setDraft] = useState('');
+  const [subject, setSubject] = useState('');
   const [sending, setSending] = useState(false);
   const [sendResult, setSendResult] = useState<{ ok: boolean; text: string } | null>(null);
 
@@ -109,9 +140,22 @@ export default function LeadDetailsScreen() {
   // Hang up if the screen unmounts mid-call.
   useEffect(() => () => callRef.current?.hangup(), []);
 
+  const loadActivities = useCallback(async () => {
+    if (!id) return;
+    try {
+      setActivitiesLoading(true);
+      setActivities(await fetchLeadActivities(id));
+    } catch {
+      setActivities([]);
+    } finally {
+      setActivitiesLoading(false);
+    }
+  }, [id]);
+
   const openComposer = (c: LeadMessageChannel) => {
     setChannel(c);
     setDraft('');
+    setSubject('');
     setSendResult(null);
   };
 
@@ -128,15 +172,20 @@ export default function LeadDetailsScreen() {
       Toast.show({ type: 'error', text1: 'Message is required' });
       return;
     }
+    if (channel === 'email' && !subject.trim()) {
+      Toast.show({ type: 'error', text1: 'Subject is required' });
+      return;
+    }
     try {
       setSending(true);
       setSendResult(null);
-      const res = await sendLeadMessage(lead._id, channel, message);
+      const res = await sendLeadMessage(lead._id, channel, message, subject);
       const text = `${res.message || `${CHANNEL_LABEL[channel]} sent`}${
         res.data?.status ? ` (status: ${res.data.status})` : ''
       }`;
       setSendResult({ ok: true, text });
       setDraft('');
+      setSubject('');
       Toast.show({ type: 'success', text1: res.message || `${CHANNEL_LABEL[channel]} sent` });
     } catch (err: any) {
       const text = err?.response
@@ -146,6 +195,7 @@ export default function LeadDetailsScreen() {
       Toast.show({ type: 'error', text1: `${CHANNEL_LABEL[channel]} failed`, text2: text });
     } finally {
       setSending(false);
+      loadActivities(); // backend logs the message as an activity
     }
   };
 
@@ -166,6 +216,7 @@ export default function LeadDetailsScreen() {
     callRef.current = null;
     setCallState('idle');
     setCallError('');
+    loadActivities();
   };
 
   const load = useCallback(async () => {
@@ -174,12 +225,31 @@ export default function LeadDetailsScreen() {
       setError(false);
       setLoading(true);
       setLead(await fetchLead(id));
+      loadActivities();
     } catch {
       setError(true);
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, loadActivities]);
+
+  // Users resolve the "Assigned To" id to a name (web looks it up the same way).
+  useEffect(() => {
+    fetchUsers().then(setUsers).catch(() => setUsers([]));
+  }, []);
+
+  const doConvert = useCallback(async () => {
+    if (!lead || lead.isConverted) return;
+    try {
+      setConverting(true);
+      Toast.show({ type: 'success', text1: await convertLead(lead) });
+      await load();
+    } catch (err: any) {
+      Toast.show({ type: 'error', text1: err?.response?.data?.message || 'Failed to convert lead' });
+    } finally {
+      setConverting(false);
+    }
+  }, [lead, load]);
 
   useFocusEffect(
     useCallback(() => {
@@ -189,7 +259,7 @@ export default function LeadDetailsScreen() {
 
   const confirmDelete = useCallback(() => {
     if (!id) return;
-    Alert.alert('Delete lead', `Delete “${lead?.name ?? 'this lead'}”?`, [
+    Alert.alert('Delete lead', 'Are you sure you want to delete this lead?', [
       { text: 'Cancel', style: 'cancel' },
       {
         text: 'Delete',
@@ -198,7 +268,7 @@ export default function LeadDetailsScreen() {
           try {
             setDeleting(true);
             await deleteLead(id);
-            Toast.show({ type: 'success', text1: 'Lead deleted' });
+            Toast.show({ type: 'success', text1: 'Lead deleted successfully' });
             router.back();
           } catch (err: any) {
             setDeleting(false);
@@ -211,7 +281,7 @@ export default function LeadDetailsScreen() {
         },
       },
     ]);
-  }, [id, lead]);
+  }, [id]);
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
@@ -257,11 +327,8 @@ export default function LeadDetailsScreen() {
                 {lead.company ? ` · ${lead.company}` : ''}
               </Text>
               <View className="mt-2 flex-row flex-wrap gap-2">
-                <View className="rounded-full bg-white/10 px-2.5 py-1">
-                  <Text className="text-xs font-medium text-white">
-                    {lead.status}
-                  </Text>
-                </View>
+                <StatusBadge status={lead.status} />
+                <PriorityChip priority={priorityOf(lead)} />
                 <View className="rounded-full bg-indigo-500/20 px-2.5 py-1">
                   <Text className="text-xs font-medium text-indigo-100">
                     {lead.source || 'Website'}
@@ -280,6 +347,12 @@ export default function LeadDetailsScreen() {
         {lead ? (
           <View className="mt-4 flex-row gap-2">
             <CommAction
+              icon="mail"
+              label="Email"
+              disabled={!lead.email}
+              onPress={() => openComposer('email')}
+            />
+            <CommAction
               icon="message-square"
               label="SMS"
               disabled={!isValidLeadPhone(lead.phone)}
@@ -293,7 +366,7 @@ export default function LeadDetailsScreen() {
             />
             <CommAction
               icon="phone-call"
-              label={callActive ? CALL_LABEL[callState] : 'Call'}
+              label={callActive ? CALL_LABEL[callState] : 'Voice'}
               disabled={!isValidLeadPhone(lead.phone) || callActive}
               onPress={startCall}
             />
@@ -319,7 +392,7 @@ export default function LeadDetailsScreen() {
                   Send {channel ? CHANNEL_LABEL[channel] : ''}
                 </Text>
                 <Text className="text-xs text-slate-400" numberOfLines={1}>
-                  {lead?.name} · {lead?.phone}
+                  {lead?.name} · {channel === 'email' ? lead?.email : lead?.phone}
                 </Text>
               </View>
               <Pressable
@@ -331,6 +404,16 @@ export default function LeadDetailsScreen() {
               </Pressable>
             </View>
 
+            {channel === 'email' ? (
+              <TextInput
+                value={subject}
+                onChangeText={setSubject}
+                editable={!sending}
+                placeholder="Subject"
+                placeholderTextColor="#64748b"
+                className="mb-3 rounded-2xl border border-white/10 bg-white/5 p-4 text-sm text-white"
+              />
+            ) : null}
             <TextInput
               value={draft}
               onChangeText={setDraft}
@@ -343,7 +426,7 @@ export default function LeadDetailsScreen() {
             />
 
             <Text className="mt-2 text-xs text-slate-500">
-              Sent via Twilio · logged to lead activity
+              Sent via {channel === 'email' ? 'Resend' : 'Twilio'} · logged to lead activity
             </Text>
 
             {sendResult ? (
@@ -447,68 +530,78 @@ export default function LeadDetailsScreen() {
           contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
           showsVerticalScrollIndicator={false}
         >
-          {/* Quick stats (mirrors web) */}
+          {/* Quick stats */}
           <View className="flex-row gap-3">
-            <StatChip label="Lead Score" value={String(lead.leadScore ?? 82)} />
+            <StatChip label="Deal Value" value={formatINR(lead.value)} />
+            <StatChip label="Expected" value={formatINR(lead.expectedValue)} />
             <StatChip
-              label="Expected Deal"
-              value={`₹${lead.expectedValue ?? 0}`}
-            />
-            <StatChip
-              label="Follow-up"
-              value={lead.followUpDate || 'Not set'}
+              label="Next Follow-up"
+              value={lead.nextFollowUpAt ? new Date(lead.nextFollowUpAt).toLocaleDateString('en-IN') : 'Not set'}
             />
           </View>
 
-          <View className="mt-4 flex-row items-center gap-2">
-            <Text className="text-xs text-slate-500">Derived priority:</Text>
-            <PriorityChip priority={priorityOf(lead.status)} />
+          {/* Conversion + AI (web profile footer actions) */}
+          <View className="mt-4 flex-row gap-3">
+            <Pressable
+              onPress={doConvert}
+              disabled={lead.isConverted || converting}
+              className={`flex-1 flex-row items-center justify-center gap-2 rounded-2xl py-3 ${
+                lead.isConverted ? 'bg-emerald-100' : 'bg-emerald-600 active:opacity-90'
+              }`}
+            >
+              {converting ? (
+                <ActivityIndicator size="small" color="#fff" />
+              ) : (
+                <Feather name={lead.isConverted ? 'check-circle' : 'refresh-cw'} size={16} color={lead.isConverted ? '#047857' : '#fff'} />
+              )}
+              <Text className={`text-sm font-semibold ${lead.isConverted ? 'text-emerald-700' : 'text-white'}`}>
+                {lead.isConverted ? 'Converted' : 'Convert to Opportunity'}
+              </Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setAiOpen((v) => !v)}
+              className="flex-row items-center justify-center gap-2 rounded-2xl bg-indigo-600 px-4 py-3 active:opacity-90"
+            >
+              <Feather name="cpu" size={16} color="#fff" />
+              <Text className="text-sm font-semibold text-white">AI</Text>
+            </Pressable>
           </View>
+
+          {aiOpen ? (
+            <AIInsightPanel
+              subtitle={lead.name}
+              features={LEAD_AI_FEATURES}
+              fetchInsight={(type) => getLeadInsight(type, lead)}
+              onClose={() => setAiOpen(false)}
+            />
+          ) : null}
 
           <Section title="Contact Information">
             <DetailRow
               icon="mail"
               label="Email"
-              value={lead.email}
-              onPress={
-                lead.email
-                  ? () => Linking.openURL(`mailto:${lead.email}`)
-                  : undefined
-              }
+              value={orDash(lead.email)}
+              onPress={lead.email ? () => Linking.openURL(`mailto:${lead.email}`) : undefined}
             />
             <DetailRow
               icon="phone"
               label="Phone"
-              value={lead.phone}
-              onPress={
-                lead.phone
-                  ? () => Linking.openURL(`tel:${lead.phone}`)
-                  : undefined
-              }
+              value={orDash(lead.phone)}
+              onPress={lead.phone ? () => Linking.openURL(`tel:${lead.phone}`) : undefined}
             />
-            <DetailRow icon="briefcase" label="Company" value={lead.company} />
+            <DetailRow icon="briefcase" label="Company" value={orDash(lead.company)} />
+            <DetailRow icon="award" label="Designation" value={orDash(lead.designation)} />
+            <DetailRow icon="layers" label="Industry" value={orDash(lead.industry)} />
+            <DetailRow icon="users" label="Company Size" value={orDash(lead.companySize)} />
+            <DetailRow icon="share-2" label="Source" value={orDash(lead.source)} />
+            <DetailRow icon="grid" label="Department" value={orDash(lead.department)} />
             <DetailRow
               icon="globe"
               label="Website"
-              value={lead.website}
+              value={orDash(lead.website)}
               onPress={
                 lead.website
-                  ? () =>
-                      Linking.openURL(
-                        lead.website!.startsWith('http')
-                          ? lead.website!
-                          : `https://${lead.website}`
-                      )
-                  : undefined
-              }
-            />
-            <DetailRow icon="layers" label="Industry" value={lead.industry} />
-            <DetailRow
-              icon="calendar"
-              label="Created"
-              value={
-                lead.createdAt
-                  ? new Date(lead.createdAt).toLocaleString()
+                  ? () => Linking.openURL(lead.website!.startsWith('http') ? lead.website! : `https://${lead.website}`)
                   : undefined
               }
             />
@@ -516,27 +609,102 @@ export default function LeadDetailsScreen() {
 
           <Section title="Sales Information">
             <DetailRow icon="target" label="Lead Status" value={lead.status} />
+            <DetailRow icon="flag" label="Priority" value={priorityOf(lead)} />
+            <DetailRow icon="dollar-sign" label="Deal Value" value={formatINR(lead.value)} />
+            <DetailRow icon="trending-up" label="Expected Value" value={formatINR(lead.expectedValue)} />
             <DetailRow
-              icon="flag"
-              label="Priority"
-              value={lead.priority || 'Medium'}
+              icon="calendar"
+              label="Follow-up Date"
+              value={lead.followUpDate ? new Date(lead.followUpDate).toLocaleDateString('en-IN') : '—'}
             />
+            <DetailRow icon="clock" label="Next Follow-up" value={orDash(formatDateTime(lead.nextFollowUpAt))} />
+            <DetailRow icon="phone-incoming" label="Last Contacted" value={orDash(formatDateTime(lead.lastContactedAt))} />
+            <DetailRow icon="user-check" label="Assigned To" value={users.find((u) => String(u._id) === String(lead.assignedTo))?.name || (lead.assignedTo ? lead.assignedTo : 'Unassigned')} />
+          </Section>
+
+          <Section title="Lead Conversion">
+            <DetailRow icon="check-circle" label="Converted" value={lead.isConverted ? 'Yes' : 'No'} />
+            <DetailRow
+              icon="calendar"
+              label="Converted At"
+              value={lead.convertedAt ? formatDateTime(lead.convertedAt) : 'Not Converted'}
+            />
+            <DetailRow
+              icon="briefcase"
+              label="Opportunity"
+              value={
+                typeof lead.convertedOpportunity === 'object' && lead.convertedOpportunity?.title
+                  ? lead.convertedOpportunity.title
+                  : lead.convertedOpportunity
+                    ? 'Linked'
+                    : '—'
+              }
+            />
+          </Section>
+
+          <Section title="Record Information">
             <DetailRow
               icon="user"
-              label="Assigned To"
-              value={lead.assignedTo || 'Not Assigned'}
+              label="Lead Owner"
+              value={orDash(typeof lead.owner === 'object' ? lead.owner?.name : undefined)}
             />
-            <DetailRow
-              icon="dollar-sign"
-              label="Expected Deal"
-              value={`₹${lead.expectedValue ?? 0}`}
-            />
+            <DetailRow icon="calendar" label="Created" value={orDash(formatDateTime(lead.createdAt))} />
+            <DetailRow icon="edit-3" label="Last Updated" value={orDash(formatDateTime(lead.updatedAt))} />
+          </Section>
+
+          <Section title="Requirement & Message">
+            <Text className="pt-1 text-xs font-semibold text-slate-400">Requirement</Text>
+            <Text className="pb-3 pt-1 text-sm leading-relaxed text-slate-700">{lead.requirement || 'No requirement provided'}</Text>
+            <Text className="text-xs font-semibold text-slate-400">Customer Message</Text>
+            <Text className="pb-4 pt-1 text-sm leading-relaxed text-slate-700">{lead.message || 'No message provided'}</Text>
           </Section>
 
           <Section title="Notes">
             <Text className="pb-4 pt-1 text-sm leading-relaxed text-slate-700">
               {lead.notes || 'No notes have been added for this lead yet.'}
             </Text>
+          </Section>
+
+          <Section title="Activity Timeline">
+            {activitiesLoading ? (
+              <ActivityIndicator className="py-6" color="#4f46e5" />
+            ) : activities.length === 0 ? (
+              <View className="items-center py-6">
+                <Feather name="activity" size={22} color="#94a3b8" />
+                <Text className="mt-2 text-sm font-semibold text-slate-700">No activities yet</Text>
+                <Text className="mt-1 text-center text-xs text-slate-400">
+                  Calls, emails, follow-ups and other lead activities will appear here.
+                </Text>
+              </View>
+            ) : (
+              activities.map((a, i) => (
+                <View key={a._id} className={`flex-row py-3 ${i ? 'border-t border-slate-100' : ''}`}>
+                  <View className="h-9 w-9 items-center justify-center rounded-full bg-indigo-50">
+                    <Feather name={ACTIVITY_ICON[String(a.type || '').toLowerCase()] ?? 'activity'} size={15} color="#4f46e5" />
+                  </View>
+                  <View className="ml-3 flex-1">
+                    <View className="flex-row items-center justify-between">
+                      <Text className="text-sm font-semibold text-slate-800">{a.type || 'Activity'}</Text>
+                      <Text className={`text-[11px] font-semibold ${a.done ? 'text-emerald-600' : 'text-amber-600'}`}>
+                        {a.done ? 'Done' : 'Pending'}
+                      </Text>
+                    </View>
+                    {a.notes ? <Text className="mt-0.5 text-xs text-slate-600">{a.notes}</Text> : null}
+                    {a.outcome ? <Text className="mt-0.5 text-xs text-slate-500">Outcome: {a.outcome}</Text> : null}
+                    <Text className="mt-1 text-[11px] text-slate-400">
+                      {[
+                        formatDateTime(a.createdAt),
+                        a.priority,
+                        a.createdBy?.name,
+                        a.dueDate ? `Due ${new Date(a.dueDate).toLocaleDateString('en-IN')}` : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' · ')}
+                    </Text>
+                  </View>
+                </View>
+              ))
+            )}
           </Section>
         </ScrollView>
       )}

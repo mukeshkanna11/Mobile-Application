@@ -3,7 +3,7 @@ import { Pressable, Text, View } from 'react-native';
 
 import Badge from '@/components/ui/Badge';
 import ProductThumb from '@/components/ui/ProductThumb';
-import { stockLevel, type Product } from '@/services/products';
+import { stockLevel, type Product, getProductBarcode } from '@/services/products';
 
 /**
  * Mobile product card — replaces a web table row. Shows image, name, SKU,
@@ -36,7 +36,7 @@ export default function ProductCard({
             {product.name}
           </Text>
           <Text className="text-xs text-slate-500" numberOfLines={1}>
-            SKU: {product.sku || '—'}
+            SKU: {product.sku || '—'} · Barcode: {getProductBarcode(product) || '—'}
           </Text>
           <View className="mt-1 flex-row items-center gap-2">
             <View className="rounded-full bg-indigo-50 px-2 py-0.5">

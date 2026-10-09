@@ -4,6 +4,7 @@ import { Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import EnterpriseHeader from '@/components/ui/EnterpriseHeader';
+import { CRM_AUTOMATION_MODULES } from '@/services/automations';
 
 type FeatherName = keyof typeof Feather.glyphMap;
 
@@ -53,9 +54,25 @@ export default function MoreScreen() {
           Workspaces
         </Text>
 
-        {MODULES.map((mod) => (
+        {[
+          ...MODULES.map((m) => ({ ...m, section: 'Workspaces' })),
+          ...CRM_AUTOMATION_MODULES.map((m) => ({
+            ...m,
+            section: 'CRM Automations',
+            onPress: () => router.push({ pathname: '/automations/[module]', params: { module: m.module } }),
+          })),
+        ].map((mod, i, all) => (
+          <View key={mod.label}>
+            {/* Section heading whenever the group changes (CRM Automations kept separate) */}
+            {i > 0 && all[i - 1].section !== mod.section ? (
+              <View className="mb-3 mt-4 flex-row items-center gap-2">
+                <Feather name="zap" size={13} color="#4f46e5" />
+                <Text className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                  {mod.section}
+                </Text>
+              </View>
+            ) : null}
           <Pressable
-            key={mod.label}
             onPress={mod.onPress}
             className="mb-3 flex-row items-center rounded-3xl border border-slate-200 bg-white p-4 shadow-sm active:bg-slate-50"
           >
@@ -76,6 +93,7 @@ export default function MoreScreen() {
 
             <Feather name="chevron-right" size={18} color="#cbd5e1" />
           </Pressable>
+          </View>
         ))}
       </ScrollView>
     </SafeAreaView>

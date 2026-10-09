@@ -58,6 +58,12 @@ export default function UserCard({
           <Text className="text-xs text-slate-500" numberOfLines={1}>
             {user.email || '—'}
           </Text>
+          {/* Web table's Department / Designation / Company columns */}
+          {user.department || user.designation || user.company ? (
+            <Text className="mt-0.5 text-xs text-slate-400" numberOfLines={1}>
+              {[user.designation, user.department, user.company].filter(Boolean).join(' · ')}
+            </Text>
+          ) : null}
         </View>
 
         <Feather name="chevron-right" size={18} color="#cbd5e1" />

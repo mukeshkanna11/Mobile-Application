@@ -1,4 +1,5 @@
 import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { router, useFocusEffect, type Href } from 'expo-router';
 import { useCallback, useState, type ComponentProps, type ReactNode } from 'react';
 import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
@@ -125,10 +126,12 @@ function SectionCard({
   subtitle,
   badge,
   badgeTone = 'indigo',
+  icon,
   action,
   children,
 }: {
   title: string;
+  icon?: FeatherName;
   subtitle?: string;
   badge?: string;
   badgeTone?: 'indigo' | 'emerald' | 'amber';
@@ -143,6 +146,11 @@ function SectionCard({
   return (
     <View className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
       <View className="mb-4 flex-row items-start justify-between">
+        {icon ? (
+          <View className="mr-3 rounded-xl bg-indigo-50 p-2.5">
+            <Feather name={icon} size={18} color="#4f46e5" />
+          </View>
+        ) : null}
         <View className="min-w-0 flex-1 pr-3">
           <Text className="text-base font-semibold text-slate-900">{title}</Text>
           {subtitle ? <Text className="text-xs text-slate-500">{subtitle}</Text> : null}
@@ -266,11 +274,23 @@ function StockChart({ data }: { data: DashboardData['stockChart'] }) {
   );
 }
 
-function RankRow({ rank, title, subtitle, value }: { rank: number; title: string; subtitle: string; value: string }) {
+function RankRow({
+  rank,
+  title,
+  subtitle,
+  value,
+  filled = false,
+}: {
+  rank: number;
+  title: string;
+  subtitle: string;
+  value: string;
+  filled?: boolean;
+}) {
   return (
     <View className="flex-row items-center py-1.5">
-      <View className="h-7 w-7 items-center justify-center rounded-lg bg-indigo-50">
-        <Text className="text-xs font-bold text-indigo-600">{rank}</Text>
+      <View className={`h-7 w-7 items-center justify-center rounded-lg ${filled ? 'bg-violet-500' : 'bg-indigo-50'}`}>
+        <Text className={`text-xs font-bold ${filled ? 'text-white' : 'text-indigo-600'}`}>{rank}</Text>
       </View>
       <View className="ml-3 min-w-0 flex-1">
         <Text className="text-sm font-medium text-slate-800" numberOfLines={1}>{title}</Text>
@@ -359,12 +379,23 @@ export default function DashboardScreen() {
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
       >
         {/* ============ EXECUTIVE SUMMARY HERO ============ */}
-        <View className="overflow-hidden rounded-3xl bg-slate-900 p-5">
+        <LinearGradient
+          colors={['#020617', '#0f172a', '#312e81']}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={{ borderRadius: 24, overflow: 'hidden', padding: 20 }}
+        >
           <View className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-indigo-500/20" />
+          <View className="absolute -bottom-16 -left-16 h-48 w-48 rounded-full bg-cyan-500/10" />
           <View className="flex-row items-start">
-            <View className="h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500">
+            <LinearGradient
+              colors={['#6366f1', '#9333ea']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={{ width: 48, height: 48, borderRadius: 16, alignItems: 'center', justifyContent: 'center' }}
+            >
               <Feather name="bar-chart-2" size={24} color="white" />
-            </View>
+            </LinearGradient>
             <View className="ml-3 min-w-0 flex-1">
               <View className="flex-row items-center self-start rounded-full border border-white/10 bg-white/10 px-2.5 py-1">
                 <View className="mr-1.5 h-2 w-2 rounded-full bg-green-400" />
@@ -399,7 +430,7 @@ export default function DashboardScreen() {
             <HeroStat label="Sales Orders" value={num(d.salesOrders)} accent="text-white" />
             <HeroStat label="Active Clients" value={num(d.activeClients)} accent="text-cyan-300" />
           </View>
-        </View>
+        </LinearGradient>
 
         {/* ============ KPI GROUPS ============ */}
         {kpiGroups(d).map((group) => (
@@ -521,7 +552,7 @@ export default function DashboardScreen() {
         <SectionCard title="Top Customers" subtitle="Highest revenue accounts">
           {d.topCustomers.length ? (
             d.topCustomers.map((c, i) => (
-              <RankRow key={c.name} rank={i + 1} title={c.name} subtitle={`${num(c.orders)} orders`} value={inr(c.revenue)} />
+              <RankRow key={c.name} rank={i + 1} title={c.name} subtitle={`${num(c.orders)} orders`} value={inr(c.revenue)} filled />
             ))
           ) : (
             <Empty icon="users" title="No customers yet" subtitle="Top customers appear once orders are placed." />
@@ -564,7 +595,7 @@ export default function DashboardScreen() {
         </SectionCard>
 
         {/* ============ QUICK ACTIONS ============ */}
-        <SectionCard title="Quick Actions" subtitle="Jump straight into daily workflows">
+        <SectionCard title="Quick Actions" subtitle="Jump straight into daily workflows" icon="zap">
           <View className="flex-row flex-wrap" style={{ gap: 10 }}>
             {QUICK_ACTIONS.map((a) => (
               <View key={a.label} style={{ width: '31%' }}>

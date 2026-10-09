@@ -23,7 +23,6 @@ import {
 
 const CLIENT_TYPES = ['Customer', 'Prospect', 'Partner'] as const;
 const STATUSES: readonly ClientStatus[] = ['Active', 'Inactive'];
-const SUBSCRIPTIONS = ['Trial', 'Active', 'Expired', 'Cancelled'] as const;
 
 function SectionTitle({ children }: { children: string }) {
   return (
@@ -297,21 +296,6 @@ export default function ClientForm({
           options={STATUSES}
           value={form.status}
           onChange={(v) => set('status', v)}
-        />
-
-        <SectionTitle>Subscription</SectionTitle>
-        <FormField
-          label="Current Plan"
-          value={form.currentPlan}
-          onChangeText={(t) => set('currentPlan', t)}
-          placeholder="e.g. Growth Suite"
-        />
-        <Segmented
-          label="Subscription Status"
-          options={SUBSCRIPTIONS}
-          value={form.subscriptionStatus}
-          onChange={(v) => set('subscriptionStatus', v)}
-          scroll
         />
 
         <SectionTitle>Additional Notes</SectionTitle>

@@ -81,13 +81,8 @@ export default function ProductForm({
           onChangeText={(t) => set('name', t)}
           placeholder="Apple iPhone 16"
         />
-        <FormField
-          label="SKU"
-          value={form.sku}
-          onChangeText={(t) => set('sku', t)}
-          placeholder="RTS-10001"
-          autoCapitalize="characters"
-        />
+        {/* SKU is system generated and read-only (web: readOnly, "Auto generated") */}
+        <FormField label="SKU" value={form.sku} editable={false} placeholder="Auto generated" />
         <FormField
           label="Category"
           value={form.category}
@@ -99,6 +94,14 @@ export default function ProductForm({
           options={STATUSES}
           value={form.status}
           onChange={(v) => set('status', v)}
+        />
+
+        <SectionTitle>Barcode</SectionTitle>
+        <FormField
+          label="Product Barcode"
+          value={form.barcode}
+          editable={false}
+          placeholder="Generated automatically after saving"
         />
 
         <SectionTitle>Pricing & Inventory</SectionTitle>
@@ -113,13 +116,6 @@ export default function ProductForm({
           label="Stock Quantity"
           value={form.stockQuantity}
           onChangeText={(t) => set('stockQuantity', t)}
-          placeholder="0"
-          keyboardType="numeric"
-        />
-        <FormField
-          label="Tax (%)"
-          value={form.tax}
-          onChangeText={(t) => set('tax', t)}
           placeholder="0"
           keyboardType="numeric"
         />

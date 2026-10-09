@@ -8,8 +8,7 @@ import { createLead, type LeadInput } from '@/services/leads';
 
 export default function NewLeadScreen() {
   const handleCreate = async (input: LeadInput) => {
-    await createLead(input);
-    Toast.show({ type: 'success', text1: 'Lead created' });
+    Toast.show({ type: 'success', text1: await createLead(input) });
     router.back();
   };
 

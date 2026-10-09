@@ -18,9 +18,13 @@ function avatarLetter(client: Client): string {
 export default function ClientCard({
   client,
   onPress,
+  onEdit,
+  onDelete,
 }: {
   client: Client;
   onPress?: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }) {
   const isActive = client.status === 'Active';
 
@@ -87,6 +91,24 @@ export default function ClientCard({
             <Feather name="phone" size={12} color="#94a3b8" />
             <Text className="text-xs text-slate-500">{client.phone}</Text>
           </View>
+        ) : null}
+      </View>
+
+      {/* Created + row actions (web table Created / Edit / Delete columns) */}
+      <View className="mt-3 flex-row items-center border-t border-slate-100 pt-3">
+        <Feather name="calendar" size={12} color="#94a3b8" />
+        <Text className="ml-1 flex-1 text-xs text-slate-500">
+          {client.createdAt ? new Date(client.createdAt).toLocaleDateString() : '—'}
+        </Text>
+        {onEdit ? (
+          <Pressable onPress={onEdit} hitSlop={6} className="ml-2 rounded-xl bg-slate-50 p-2 active:opacity-70">
+            <Feather name="edit-2" size={15} color="#475569" />
+          </Pressable>
+        ) : null}
+        {onDelete ? (
+          <Pressable onPress={onDelete} hitSlop={6} className="ml-2 rounded-xl bg-red-50 p-2 active:opacity-70">
+            <Feather name="trash-2" size={15} color="#dc2626" />
+          </Pressable>
         ) : null}
       </View>
     </Pressable>

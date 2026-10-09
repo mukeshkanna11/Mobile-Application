@@ -180,19 +180,25 @@ export default function UserDetailsScreen() {
                 user.email ? () => openUrl(`mailto:${user.email}`) : undefined
               }
             />
-            <DetailRow
-              icon="phone"
-              label="Phone"
-              value={user.phone}
-              onPress={
-                user.phone ? () => openUrl(`tel:${user.phone}`) : undefined
-              }
-            />
+          </Section>
+
+          <Section title="Employment Details">
             <DetailRow icon="briefcase" label="Department" value={user.department} />
+            <DetailRow icon="award" label="Designation" value={user.designation} />
             <DetailRow
               icon="home"
               label="Company"
               value={user.company ?? undefined}
+            />
+            <DetailRow
+              icon="hash"
+              label="Employee ID"
+              value={user.employeeId ?? undefined}
+            />
+            <DetailRow
+              icon="calendar"
+              label="Joining Date"
+              value={user.joiningDate ? formatDate(user.joiningDate) : undefined}
             />
           </Section>
 

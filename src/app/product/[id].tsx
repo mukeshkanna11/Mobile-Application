@@ -14,6 +14,7 @@ import {
   fetchProduct,
   stockLevel,
   type Product,
+  getProductBarcode,
 } from '@/services/products';
 
 function StatChip({ label, value, tone }: { label: string; value: string; tone?: string }) {
@@ -193,7 +194,8 @@ export default function ProductDetailsScreen() {
 
           <Section title="Product Information">
             <DetailRow icon="tag" label="Name" value={product.name} />
-            <DetailRow icon="hash" label="SKU" value={product.sku} />
+            <DetailRow icon="hash" label="SKU" value={product.sku || '—'} />
+            <DetailRow icon="maximize" label="Barcode" value={getProductBarcode(product) || '—'} />
             <DetailRow
               icon="grid"
               label="Category"

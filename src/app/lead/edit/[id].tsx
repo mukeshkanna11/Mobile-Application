@@ -38,8 +38,7 @@ export default function EditLeadScreen() {
   }, [load]);
 
   const handleUpdate = async (input: LeadInput) => {
-    await updateLead(id!, input);
-    Toast.show({ type: 'success', text1: 'Lead updated' });
+    Toast.show({ type: 'success', text1: await updateLead(id!, input) });
     router.back();
   };
 
