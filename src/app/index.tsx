@@ -19,9 +19,10 @@ import FeatureCard from '@/components/ui/FeatureCard';
 import GradientBackground from '@/components/ui/GradientBackground';
 import InputField from '@/components/ui/InputField';
 import PrimaryButton from '@/components/ui/PrimaryButton';
-import { ADMIN_EMAIL, API_URL } from '@/constants/config';
+import { API_URL } from '@/constants/config';
 import {
   clearRememberedPassword,
+  getRememberedEmail,
   getRememberedPassword,
   getToken,
   login,
@@ -41,6 +42,7 @@ export default function LoginScreen() {
   const { width } = useWindowDimensions();
   const isWide = width >= 900;
 
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [rememberMe, setRememberMe] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -54,6 +56,8 @@ export default function LoginScreen() {
         router.replace('/dashboard');
         return;
       }
+      const savedEmail = await getRememberedEmail();
+      if (savedEmail) setEmail(savedEmail);
       const saved = await getRememberedPassword();
       if (saved) {
         setPassword(saved);
@@ -64,6 +68,15 @@ export default function LoginScreen() {
   }, []);
 
   const handleLogin = async () => {
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail) {
+      Toast.show({ type: 'error', text1: 'Email is required' });
+      return;
+    }
+    if (!/^\S+@\S+\.\S+$/.test(trimmedEmail)) {
+      Toast.show({ type: 'error', text1: 'Enter a valid email address' });
+      return;
+    }
     if (!password.trim()) {
       Toast.show({ type: 'error', text1: 'Password is required' });
       return;
@@ -71,10 +84,10 @@ export default function LoginScreen() {
 
     try {
       setLoading(true);
-      await login(ADMIN_EMAIL, password);
+      await login(trimmedEmail, password);
 
       if (rememberMe) {
-        await saveRememberedPassword(password);
+        await saveRememberedPassword(trimmedEmail, password);
       } else {
         await clearRememberedPassword();
       }
@@ -176,10 +189,15 @@ export default function LoginScreen() {
 
                   <View className="gap-5">
                     <InputField
-                      label="Admin Email"
+                      label="Email"
                       icon="mail"
-                      value={ADMIN_EMAIL}
-                      disabled
+                      value={email}
+                      onChangeText={setEmail}
+                      placeholder="Enter your email"
+                      keyboardType="email-address"
+                      autoComplete="email"
+                      textContentType="emailAddress"
+                      returnKeyType="next"
                     />
 
                     <InputField

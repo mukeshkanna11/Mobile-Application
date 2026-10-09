@@ -193,3 +193,42 @@ export function filterLeads(leads: Lead[], f: LeadFilters): Lead[] {
       f.priority === 'All' ? true : priorityOf(l.status) === f.priority
     );
 }
+
+/* ---------------------------------------------------------------------------
+ * Lead communications — reuses the web CRM endpoint verbatim:
+ *   POST /leads/:id/message  { channel: 'sms' | 'whatsapp', message }
+ * The backend sends via Twilio and logs the Activity.
+ * ------------------------------------------------------------------------- */
+
+export type LeadMessageChannel = 'sms' | 'whatsapp';
+
+export interface LeadMessageResult {
+  success: boolean;
+  message?: string;
+  data?: { channel: string; sid?: string; status?: string; to?: string };
+}
+
+export async function sendLeadMessage(
+  id: string,
+  channel: LeadMessageChannel,
+  message: string
+): Promise<LeadMessageResult> {
+  const { data } = await API.post<LeadMessageResult>(`/leads/${id}/message`, {
+    channel,
+    message,
+  });
+  return data;
+}
+
+/** Mirrors the backend check: 10-digit Indian mobile (opt. leading 0) or +E.164. */
+export function isValidLeadPhone(phone?: string): boolean {
+  const raw = String(phone ?? '').trim();
+  if (!raw) return false;
+  let digits = raw.replace(/\D/g, '');
+  if (!raw.startsWith('+')) {
+    if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
+    if (digits.length === 10) digits = `91${digits}`;
+  }
+  if (!/^[1-9]\d{7,14}$/.test(digits)) return false;
+  return digits.startsWith('91') ? /^91[6-9]\d{9}$/.test(digits) : true;
+}

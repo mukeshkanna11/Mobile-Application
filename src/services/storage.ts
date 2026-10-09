@@ -5,6 +5,7 @@ export const StorageKeys = {
   token: "auth.token",
   user: "auth.user",
   rememberPassword: "auth.rememberPassword",
+  rememberEmail: "auth.rememberEmail",
 } as const;
 
 export async function setItem(key: string, value: string): Promise<void> {

@@ -48,9 +48,17 @@ export async function getToken(): Promise<string | null> {
   return getItem(StorageKeys.token);
 }
 
-/** Remember Me: store / restore / clear the admin password. */
-export async function saveRememberedPassword(password: string): Promise<void> {
+/** Remember Me: store / restore / clear the login email + password. */
+export async function saveRememberedPassword(
+  email: string,
+  password: string
+): Promise<void> {
+  await setItem(StorageKeys.rememberEmail, email);
   await setItem(StorageKeys.rememberPassword, password);
+}
+
+export async function getRememberedEmail(): Promise<string | null> {
+  return getItem(StorageKeys.rememberEmail);
 }
 
 export async function getRememberedPassword(): Promise<string | null> {
@@ -58,5 +66,6 @@ export async function getRememberedPassword(): Promise<string | null> {
 }
 
 export async function clearRememberedPassword(): Promise<void> {
+  await removeItem(StorageKeys.rememberEmail);
   await removeItem(StorageKeys.rememberPassword);
 }

@@ -1,947 +1,579 @@
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
-import { useCallback, useEffect, useState, type ReactNode } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  Text,
-  View,
-} from 'react-native';
+import { router, useFocusEffect, type Href } from 'expo-router';
+import { useCallback, useState, type ComponentProps, type ReactNode } from 'react';
+import { Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
-import ActivityRow from '@/components/ui/ActivityRow';
 import QuickAction from '@/components/ui/QuickAction';
 import StatCard from '@/components/ui/StatCard';
+import { LoadingState, MessageState } from '@/components/ui/StateView';
 
-import { logout, type AuthUser } from '@/services/auth';
+import { logout } from '@/services/auth';
 import { fetchDashboard, type DashboardData } from '@/services/dashboard';
-import { getObject, StorageKeys } from '@/services/storage';
 
+type FeatherName = ComponentProps<typeof Feather>['name'];
 
+const inr = (n: number) => `₹${Number(n || 0).toLocaleString('en-IN')}`;
+const num = (n: number) => Number(n || 0).toLocaleString('en-IN');
+const shortDate = (iso?: string) => (iso ? new Date(iso).toLocaleDateString() : '—');
 
-const QUICK_ACTIONS = [
-  {
-    label: 'Add Client',
-    icon: 'user-plus' as const,
-    color: '#4f46e5',
-    onPress: () => router.push('/clients'),
-  },
-  {
-    label: 'New Invoice',
-    icon: 'file-plus' as const,
-    color: '#9333ea',
-    onPress: () => router.push('/invoices'),
-  },
-  {
-    label: 'Add Product',
-    icon: 'package' as const,
-    color: '#0ea5e9',
-    onPress: () => router.push('/products'),
-  },
-  {
-    label: 'Stock In',
-    icon: 'download' as const,
-    color: '#16a34a',
-    onPress: () => router.push('/inventory'),
-  },
+const STATUS_COLORS: Record<string, string> = {
+  New: '#3b82f6',
+  Contacted: '#f59e0b',
+  Qualified: '#22c55e',
+  Closed: '#64748b',
+};
+
+const TONES = {
+  indigo: { tint: 'bg-indigo-50', color: '#4f46e5' },
+  emerald: { tint: 'bg-emerald-50', color: '#059669' },
+  violet: { tint: 'bg-violet-50', color: '#7c3aed' },
+  amber: { tint: 'bg-amber-50', color: '#d97706' },
+  sky: { tint: 'bg-sky-50', color: '#0284c7' },
+  red: { tint: 'bg-red-50', color: '#dc2626' },
+};
+
+const ACTIVITY_ICON: Record<string, { icon: FeatherName; color: string }> = {
+  Call: { icon: 'phone', color: '#3b82f6' },
+  Email: { icon: 'mail', color: '#8b5cf6' },
+  Meeting: { icon: 'calendar', color: '#22c55e' },
+  Lead: { icon: 'user-plus', color: '#6366f1' },
+};
+
+/** Website quick actions, mapped to the screens that exist in the app. */
+const QUICK_ACTIONS: { label: string; icon: FeatherName; to: Href }[] = [
+  { label: 'New Lead', icon: 'user-plus', to: '/lead/new' },
+  { label: 'Add Client', icon: 'briefcase', to: '/client/new' },
+  { label: 'Products', icon: 'package', to: '/products' },
+  { label: 'Inventory', icon: 'layers', to: '/inventory' },
+  { label: 'Invoices', icon: 'bar-chart-2', to: '/invoices' },
 ];
 
+type KpiItem = {
+  label: string;
+  value: string;
+  icon: FeatherName;
+  tone: keyof typeof TONES;
+  hint?: string;
+  danger?: boolean;
+  to?: Href;
+};
 
-
-function formatCurrency(value:number){
-
-  return `₹${value.toLocaleString('en-IN')}`;
-
+function kpiGroups(d: DashboardData): { title: string; items: KpiItem[] }[] {
+  return [
+    {
+      title: 'Revenue',
+      items: [
+        { label: 'Total Revenue', value: inr(d.totalRevenue), icon: 'credit-card', tone: 'emerald' },
+        { label: 'Monthly Average', value: inr(d.monthlyAvg), icon: 'trending-up', tone: 'indigo' },
+        { label: 'Won Deal Revenue', value: inr(d.wonRevenue), icon: 'award', tone: 'amber' },
+        { label: 'Purchase Spend', value: inr(d.purchaseSpend), icon: 'dollar-sign', tone: 'violet' },
+      ],
+    },
+    {
+      title: 'Sales',
+      items: [
+        { label: 'Total Orders', value: num(d.salesOrders), icon: 'shopping-cart', tone: 'indigo' },
+        { label: 'Delivered', value: num(d.delivered), icon: 'package', tone: 'emerald' },
+        { label: 'Approved', value: num(d.approved), icon: 'calendar', tone: 'sky' },
+        { label: 'Sales Revenue', value: inr(d.totalRevenue), icon: 'credit-card', tone: 'violet' },
+      ],
+    },
+    {
+      title: 'CRM',
+      items: [
+        { label: 'Total Leads', value: num(d.leads), icon: 'users', tone: 'indigo', hint: `${d.qualifiedLeads} qualified`, to: '/leads' },
+        { label: 'Clients', value: num(d.clients), icon: 'briefcase', tone: 'sky', hint: `${d.activeClients} active`, to: '/clients' },
+        { label: 'Open Opportunities', value: num(d.openOpps), icon: 'target', tone: 'violet', to: '/opportunities' },
+        { label: 'Pipeline Value', value: inr(d.pipelineValue), icon: 'credit-card', tone: 'emerald' },
+      ],
+    },
+    {
+      title: 'ERP',
+      items: [
+        { label: 'Products', value: num(d.products), icon: 'package', tone: 'indigo', to: '/products' },
+        { label: 'Warehouses', value: num(d.warehouses), icon: 'home', tone: 'sky', to: '/warehouses' },
+        { label: 'Inventory Items', value: num(d.inventoryItems), icon: 'layers', tone: 'violet', to: '/inventory' },
+        { label: 'Purchase Orders', value: num(d.purchaseOrders), icon: 'shopping-cart', tone: 'amber' },
+      ],
+    },
+    {
+      title: 'Inventory',
+      items: [
+        { label: 'Total Units', value: num(d.totalUnits), icon: 'layers', tone: 'indigo' },
+        { label: 'Low Stock', value: num(d.lowStock), icon: 'alert-triangle', tone: 'amber', danger: d.lowStock > 0 },
+        { label: 'Out of Stock', value: num(d.outOfStock), icon: 'x-octagon', tone: 'red', danger: d.outOfStock > 0 },
+        { label: 'Health Score', value: `${d.healthScore}%`, icon: 'shield', tone: 'emerald' },
+      ],
+    },
+    {
+      title: 'Purchase',
+      items: [
+        { label: 'Total POs', value: num(d.purchaseOrders), icon: 'shopping-cart', tone: 'violet' },
+        { label: 'Pending', value: num(d.pendingPO), icon: 'clock', tone: 'amber' },
+        { label: 'Completed', value: num(d.completedPO), icon: 'check-circle', tone: 'emerald' },
+        { label: 'Total Spend', value: inr(d.purchaseSpend), icon: 'dollar-sign', tone: 'indigo' },
+      ],
+    },
+  ];
 }
 
+/* ================= PRESENTATIONAL HELPERS ================= */
 
-/** Uniform gap between every dashboard section. */
-const SECTION_GAP = 'mt-8';
-
-
-/**
- * One spec for every section heading: same type scale, same bottom margin, and
- * a trailing action that can never be squeezed by a long title.
- */
-function SectionHeader({
+function SectionCard({
   title,
   subtitle,
-  actionLabel,
-  onAction,
   badge,
+  badgeTone = 'indigo',
+  action,
+  children,
 }: {
   title: string;
-  subtitle: string;
-  actionLabel?: string;
-  onAction?: () => void;
-  badge?: ReactNode;
+  subtitle?: string;
+  badge?: string;
+  badgeTone?: 'indigo' | 'emerald' | 'amber';
+  action?: { label: string; onPress: () => void };
+  children: ReactNode;
 }) {
+  const badgeStyles = {
+    indigo: 'bg-indigo-50 text-indigo-700',
+    emerald: 'bg-emerald-50 text-emerald-700',
+    amber: 'bg-amber-50 text-amber-700',
+  }[badgeTone];
   return (
-    <View className="flex-row items-center justify-between mb-4">
-
-      <View className="flex-1 min-w-0 pr-3">
-
-        <Text className="text-xl font-bold text-slate-900" numberOfLines={1}>
-          {title}
-        </Text>
-
-        <Text
-          className="mt-0.5 text-sm leading-5 text-slate-500"
-          numberOfLines={2}
-        >
-          {subtitle}
-        </Text>
-
+    <View className="mt-6 rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+      <View className="mb-4 flex-row items-start justify-between">
+        <View className="min-w-0 flex-1 pr-3">
+          <Text className="text-base font-semibold text-slate-900">{title}</Text>
+          {subtitle ? <Text className="text-xs text-slate-500">{subtitle}</Text> : null}
+        </View>
+        <View className="shrink-0 flex-row items-center gap-2">
+          {badge ? (
+            <Text className={`rounded-full px-2.5 py-1 text-xs font-medium ${badgeStyles}`}>
+              {badge}
+            </Text>
+          ) : null}
+          {action ? (
+            <Pressable onPress={action.onPress} hitSlop={8} className="flex-row items-center">
+              <Text className="text-xs font-medium text-indigo-600">{action.label}</Text>
+              <Feather name="arrow-up-right" size={14} color="#4f46e5" />
+            </Pressable>
+          ) : null}
+        </View>
       </View>
-
-      {actionLabel && onAction ? (
-
-        <Pressable
-          onPress={onAction}
-          hitSlop={6}
-          className="flex-row items-center px-3.5 py-2 rounded-full shrink-0 bg-indigo-50 active:opacity-80"
-        >
-
-          <Text className="mr-1 text-sm font-semibold text-indigo-600">
-            {actionLabel}
-          </Text>
-
-          <Feather name="arrow-right" size={16} color="#4F46E5" />
-
-        </Pressable>
-
-      ) : badge ? (
-
-        <View className="shrink-0">{badge}</View>
-
-      ) : null}
-
+      {children}
     </View>
   );
 }
 
-
-
-
-export default function DashboardScreen(){
-
-  const [user,setUser] = useState<AuthUser | null>(null);
-
-  const [data,setData] = useState<DashboardData | null>(null);
-
-  const [loading,setLoading] = useState(true);
-
-  const [refreshing,setRefreshing] = useState(false);
-
-
-
-
-  const loadDashboard = useCallback(async()=>{
-
-    try{
-
-      const response = await fetchDashboard();
-
-      setData(response);
-
-
-    }catch(error){
-
-      console.log(
-        "Dashboard API Error:",
-        error
-      );
-
-
-    }finally{
-
-      setLoading(false);
-      setRefreshing(false);
-
-    }
-
-
-  },[]);
-
-
-
-
-
-  useEffect(()=>{
-
-    getObject<AuthUser>(
-      StorageKeys.user
-    )
-    .then(setUser);
-
-
-    loadDashboard();
-
-
-  },[loadDashboard]);
-
-
-
-
-
-
-  const onRefresh = useCallback(()=>{
-
-    setRefreshing(true);
-
-    loadDashboard();
-
-
-  },[loadDashboard]);
-
-
-
-
-
-
-  const handleLogout = async()=>{
-
-    try{
-
-      await logout();
-
-      router.replace('/');
-
-
-    }catch(error){
-
-      console.log(
-        "Logout error:",
-        error
-      );
-
-    }
-
-  };
-
-
-
-
-
-return (
-
-<SafeAreaView
-className="flex-1 bg-slate-50"
-edges={['top']}
->
-
-
-<ScrollView
-
-
-showsVerticalScrollIndicator={false}
-
-
-contentContainerStyle={{
-padding:20,
-paddingBottom:40
-}}
-
-
-refreshControl={
-
-<RefreshControl
-
-refreshing={refreshing}
-
-onRefresh={onRefresh}
-
-/>
-
+function Empty({ icon, title, subtitle }: { icon: FeatherName; title: string; subtitle: string }) {
+  return (
+    <View className="items-center py-8">
+      <View className="h-12 w-12 items-center justify-center rounded-2xl bg-slate-50">
+        <Feather name={icon} size={22} color="#94a3b8" />
+      </View>
+      <Text className="mt-3 text-sm font-semibold text-slate-700">{title}</Text>
+      <Text className="mt-1 text-center text-xs text-slate-400">{subtitle}</Text>
+    </View>
+  );
 }
 
+function HeroStat({ label, value, accent }: { label: string; value: string; accent: string }) {
+  return (
+    <View style={{ flexBasis: '47%', flexGrow: 1 }} className="rounded-2xl border border-white/10 bg-white/10 p-4">
+      <Text className="text-xs text-slate-300">{label}</Text>
+      <Text numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6} className={`mt-1.5 text-xl font-bold ${accent}`}>
+        {value}
+      </Text>
+    </View>
+  );
+}
 
+const compact = (v: number) => (v >= 1000 ? `${Math.round(v / 100) / 10}k` : `${v}`);
 
->
-
-
-{/* ===================== DASHBOARD HEADER ===================== */}
-
-<View className="rounded-[28px] overflow-hidden bg-indigo-600">
-
-  {/* Background Decoration */}
-  <View className="absolute w-40 h-40 bg-indigo-500 rounded-full -top-10 -right-10 opacity-40" />
-  <View className="absolute bottom-0 w-32 h-32 rounded-full -left-12 bg-violet-500 opacity-30" />
-
-  <View className="p-6">
-
-    {/* Top Row */}
-    <View className="flex-row items-center justify-between">
-
-      {/* Company */}
-      <View className="flex-row items-center flex-1 min-w-0 pr-3">
-
-        <View className="items-center justify-center w-12 h-12 shrink-0 bg-white/20 rounded-2xl">
-
-          <Feather
-            name="briefcase"
-            size={22}
-            color="white"
-          />
-
-        </View>
-
-        <View className="flex-1 min-w-0 ml-3">
-
-          <Text
-            className="text-base font-semibold text-white"
-            numberOfLines={1}
-          >
-            ReadyTech Solutions
+/** Vertical bar chart of monthly revenue (last 12 months). */
+function RevenueChart({ data }: { data: DashboardData['salesTrend'] }) {
+  const rows = data.slice(-12);
+  const max = Math.max(...rows.map((r) => r.revenue), 1);
+  return (
+    <View className="h-48 flex-row items-end" style={{ gap: 6 }}>
+      {rows.map((r) => (
+        <View key={r.key} className="flex-1 items-center justify-end">
+          <Text className="mb-1 text-[9px] text-slate-500" numberOfLines={1}>
+            {compact(r.revenue)}
           </Text>
-
-          <Text className="text-xs text-indigo-100" numberOfLines={1}>
-            CRM Management Platform
-          </Text>
-
-        </View>
-
-      </View>
-
-      {/* Logout */}
-
-      <Pressable
-        onPress={handleLogout}
-        hitSlop={6}
-        className="items-center justify-center w-12 h-12 rounded-2xl shrink-0 bg-white/20 active:opacity-80"
-      >
-
-        <Feather
-          name="log-out"
-          size={20}
-          color="white"
-        />
-
-      </Pressable>
-
-    </View>
-
-    {/* Greeting */}
-
-    <View className="mt-6">
-
-      <Text className="text-sm text-indigo-100">
-        Welcome Back 👋
-      </Text>
-
-      <Text
-        className="mt-1 text-2xl font-bold text-white"
-        numberOfLines={2}
-      >
-
-        {user?.name ??
-          user?.email ??
-          'Administrator'}
-
-      </Text>
-
-      <Text className="mt-2 text-sm leading-5 text-indigo-100">
-
-        Manage your business, track leads, monitor sales,
-        invoices, clients and team performance from one
-        intelligent CRM dashboard.
-
-      </Text>
-
-    </View>
-
-  </View>
-
-</View>
-
-
-
-
-
-{/* ===================== REVENUE CARD ===================== */}
-
-<View className={`relative p-6 ${SECTION_GAP} overflow-hidden bg-indigo-600 rounded-[28px]`}>
-
-  {/* Background Decorations */}
-  <View className="absolute rounded-full -top-8 -right-8 w-28 h-28 bg-white/10" />
-  <View className="absolute w-24 h-24 rounded-full -bottom-10 -left-6 bg-violet-400/20" />
-
-  {/* Header */}
-  <View className="flex-row items-center justify-between">
-
-    <View className="flex-1 min-w-0 pr-3">
-
-      <Text className="text-xs tracking-wider text-indigo-200 uppercase">
-        Revenue Overview
-      </Text>
-
-      <Text className="mt-1 text-lg font-bold text-white" numberOfLines={1}>
-        Collected Revenue
-      </Text>
-
-    </View>
-
-    <View className="items-center justify-center w-12 h-12 rounded-2xl shrink-0 bg-white/15">
-
-      <Feather
-        name="dollar-sign"
-        size={22}
-        color="white"
-      />
-
-    </View>
-
-  </View>
-
-  {/* Revenue */}
-
-  {loading ? (
-
-    <ActivityIndicator
-      className="self-start mt-6"
-      color="white"
-    />
-
-  ) : (
-
-    <Text
-      className="mt-6 text-4xl font-black text-white"
-      numberOfLines={1}
-      adjustsFontSizeToFit
-      minimumFontScale={0.6}
-    >
-      {formatCurrency(data?.revenue ?? 0)}
-    </Text>
-
-  )}
-
-  <Text className="mt-2 text-sm text-indigo-100">
-    Across{" "}
-    <Text className="font-bold text-white">
-      {data?.invoices ?? 0}
-    </Text>{" "}
-    invoices
-  </Text>
-
-  {/* Bottom Section */}
-
-  <View className="flex-row items-center justify-between pt-5 mt-6 border-t border-white/15">
-
-    <View className="flex-1 min-w-0 pr-3">
-
-      <Text className="text-xs text-indigo-200">
-        Status
-      </Text>
-
-      <View className="flex-row items-center mt-1">
-
-        <View className="w-2 h-2 mr-2 bg-green-400 rounded-full shrink-0" />
-
-        <Text className="text-sm font-semibold text-white" numberOfLines={1}>
-          Revenue Growing
-        </Text>
-
-      </View>
-
-    </View>
-
-    <View className="px-3.5 py-2 rounded-full shrink-0 bg-green-500/20">
-
-      <Text className="text-sm font-bold text-green-300">
-        +12.5%
-      </Text>
-
-    </View>
-
-  </View>
-
-</View>
-
-
-
-
-
-
-
-{/* ===================== BUSINESS OVERVIEW ===================== */}
-
-<View className={SECTION_GAP}>
-
-  <SectionHeader
-    title="Business Overview"
-    subtitle="Live insights across your CRM"
-    badge={
-      <View className="flex-row items-center px-3 py-2 rounded-full bg-emerald-50">
-
-        <View className="w-2 h-2 mr-2 rounded-full bg-emerald-500" />
-
-        <Text className="text-xs font-bold tracking-wide text-emerald-600">
-          LIVE
-        </Text>
-
-      </View>
-    }
-  />
-
-  {/* Responsive 2-column grid — one uniform gap, reflows on any width */}
-
-  <View className="flex-row flex-wrap" style={{ gap: 12 }}>
-
-    {[
-      {
-        label: 'Clients',
-        value: data?.clients ?? 0,
-        icon: 'users' as const,
-        tint: 'bg-indigo-100',
-        iconColor: '#4F46E5',
-        onPress: () => router.push('/clients'),
-      },
-      {
-        label: 'Products',
-        value: data?.products ?? 0,
-        icon: 'box' as const,
-        tint: 'bg-sky-100',
-        iconColor: '#0EA5E9',
-        onPress: () => router.push('/products'),
-      },
-      {
-        label: 'Inventory',
-        value: data?.inventory ?? 0,
-        icon: 'layers' as const,
-        tint: 'bg-amber-100',
-        iconColor: '#D97706',
-        onPress: () => router.push('/inventory'),
-      },
-      {
-        label: 'Invoices',
-        value: data?.invoices ?? 0,
-        icon: 'file-text' as const,
-        tint: 'bg-purple-100',
-        iconColor: '#9333EA',
-        onPress: () => router.push('/invoices'),
-      },
-      {
-        label: 'Opportunities',
-        value: data?.opportunities ?? 0,
-        icon: 'briefcase' as const,
-        tint: 'bg-emerald-100',
-        iconColor: '#16A34A',
-        onPress: () => router.push('/opportunities'),
-      },
-      {
-        label: 'Revenue',
-        value: formatCurrency(data?.revenue ?? 0),
-        icon: 'trending-up' as const,
-        tint: 'bg-rose-100',
-        iconColor: '#DC2626',
-      },
-    ].map((stat) => (
-
-      <View
-        key={stat.label}
-        style={{ flexBasis: '47%', flexGrow: 1 }}
-      >
-
-        <StatCard
-          label={stat.label}
-          value={stat.value}
-          icon={stat.icon}
-          tint={stat.tint}
-          iconColor={stat.iconColor}
-          loading={loading}
-          onPress={stat.onPress}
-        />
-
-      </View>
-
-    ))}
-
-  </View>
-
-</View>
-
-
-
-
-
-{/* ===================== QUICK ACTIONS ===================== */}
-
-<View className={SECTION_GAP}>
-
-  <SectionHeader
-    title="Quick Actions"
-    subtitle="Access your most-used CRM tools instantly"
-  />
-
-  {/* Actions Container — responsive 2-column grid, equal cell widths */}
-
-  <View className="p-4 bg-white border shadow-sm rounded-3xl border-slate-100">
-
-    <View className="flex-row flex-wrap" style={{ gap: 12 }}>
-
-      {QUICK_ACTIONS.map((item) => (
-
-        <View
-          key={item.label}
-          style={{ flexBasis: '47%', flexGrow: 1 }}
-        >
-
-          <QuickAction {...item} />
-
-        </View>
-
-      ))}
-
-    </View>
-
-  </View>
-
-</View>
-
-
-
-
-
-
-{/* ===================== RECENT ACTIVITIES ===================== */}
-
-<View className={SECTION_GAP}>
-
-  <SectionHeader
-    title="Recent Activities"
-    subtitle="Track the latest CRM updates in real time"
-    actionLabel="View All"
-    onAction={() => router.push('/activities')}
-  />
-
-  {/* Activity Card */}
-
-  <View className="overflow-hidden bg-white border shadow-sm rounded-3xl border-slate-100">
-
-    {/* Live Status */}
-
-    <View className="flex-row items-center justify-between px-5 py-3.5 border-b border-slate-100 bg-slate-50">
-
-      <View className="flex-row items-center flex-1 min-w-0 pr-3">
-
-        <View className="w-2.5 h-2.5 mr-2 rounded-full shrink-0 bg-emerald-500" />
-
-        <Text className="text-sm font-semibold text-slate-700" numberOfLines={1}>
-          Live Activity Feed
-        </Text>
-
-      </View>
-
-      <Text className="text-xs shrink-0 text-slate-400">
-        Updated just now
-      </Text>
-
-    </View>
-
-    {/* Content */}
-
-    {loading ? (
-
-      /* Skeleton rows mirror the real row layout so nothing shifts on load */
-      <View className="py-1">
-
-        {[0, 1, 2].map((row) => (
-
           <View
-            key={row}
-            className="flex-row items-center px-5 py-3.5"
-          >
+            className="w-full rounded-t-lg bg-indigo-500"
+            style={{ height: Math.max(4, (r.revenue / max) * 140) }}
+          />
+          <Text className="mt-1 text-[10px] text-slate-500">{r.month}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
 
-            <View className="w-10 h-10 rounded-full shrink-0 bg-slate-100" />
+/** Stacked distribution bar + legend for lead status. */
+function LeadStatusChart({ data }: { data: DashboardData['leadStatusData'] }) {
+  const total = data.reduce((s, d) => s + d.value, 0);
+  return (
+    <View>
+      <View className="h-4 flex-row overflow-hidden rounded-full">
+        {data.map((d) => (
+          <View key={d.name} style={{ flex: d.value, backgroundColor: STATUS_COLORS[d.name] ?? '#94a3b8' }} />
+        ))}
+      </View>
+      <View className="mt-4" style={{ gap: 10 }}>
+        {data.map((d) => (
+          <View key={d.name} className="flex-row items-center">
+            <View className="mr-2 h-3 w-3 rounded-full" style={{ backgroundColor: STATUS_COLORS[d.name] ?? '#94a3b8' }} />
+            <Text className="flex-1 text-sm text-slate-700">{d.name}</Text>
+            <Text className="text-sm font-semibold text-slate-900">{d.value}</Text>
+            <Text className="ml-2 w-12 text-right text-xs text-slate-400">
+              {Math.round((d.value / total) * 100)}%
+            </Text>
+          </View>
+        ))}
+      </View>
+    </View>
+  );
+}
 
-            <View className="flex-1 ml-3">
-              <View className="w-2/5 h-3 rounded-full bg-slate-100" />
-              <View className="w-3/5 h-2.5 mt-2 rounded-full bg-slate-100" />
+/** Horizontal stock bars — names stay readable on narrow screens. */
+function StockChart({ data }: { data: DashboardData['stockChart'] }) {
+  const rows = data.slice().sort((a, b) => b.qty - a.qty).slice(0, 8);
+  const max = Math.max(...rows.map((r) => r.qty), 1);
+  return (
+    <View style={{ gap: 10 }}>
+      {rows.map((r, i) => (
+        <View key={`${r.name}-${i}`}>
+          <View className="mb-1 flex-row justify-between">
+            <Text className="flex-1 pr-2 text-xs text-slate-700" numberOfLines={1}>{r.name}</Text>
+            <Text className="text-xs font-semibold text-slate-900">{num(r.qty)}</Text>
+          </View>
+          <View className="h-2.5 overflow-hidden rounded-full bg-slate-100">
+            <View
+              className="h-full rounded-full bg-emerald-500"
+              style={{ width: `${Math.max(0, (r.qty / max) * 100)}%` }}
+            />
+          </View>
+        </View>
+      ))}
+      {data.length > rows.length ? (
+        <Text className="text-xs text-slate-400">Top {rows.length} of {data.length} items</Text>
+      ) : null}
+    </View>
+  );
+}
+
+function RankRow({ rank, title, subtitle, value }: { rank: number; title: string; subtitle: string; value: string }) {
+  return (
+    <View className="flex-row items-center py-1.5">
+      <View className="h-7 w-7 items-center justify-center rounded-lg bg-indigo-50">
+        <Text className="text-xs font-bold text-indigo-600">{rank}</Text>
+      </View>
+      <View className="ml-3 min-w-0 flex-1">
+        <Text className="text-sm font-medium text-slate-800" numberOfLines={1}>{title}</Text>
+        <Text className="text-xs text-slate-500">{subtitle}</Text>
+      </View>
+      <Text className="ml-2 text-sm font-semibold text-slate-900">{value}</Text>
+    </View>
+  );
+}
+
+/* ================= SCREEN ================= */
+
+export default function DashboardScreen() {
+  const [data, setData] = useState<DashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState('');
+
+  const load = useCallback(async () => {
+    try {
+      setError('');
+      setData(await fetchDashboard());
+    } catch (err: any) {
+      setError(err?.response?.data?.message || err?.message || 'Failed to load dashboard');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  // Reload whenever the tab regains focus so figures stay current.
+  useFocusEffect(
+    useCallback(() => {
+      load();
+    }, [load])
+  );
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    load();
+  }, [load]);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      router.replace('/');
+    } catch (err) {
+      console.log('Logout error:', err);
+    }
+  };
+
+  if (loading) {
+    return (
+      <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
+        <LoadingState label="Loading your dashboard…" />
+      </SafeAreaView>
+    );
+  }
+
+  if (error || !data) {
+    return (
+      <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
+        <MessageState
+          icon="alert-triangle"
+          tone="error"
+          title="Unable to load dashboard"
+          message={error}
+          actionLabel="Retry"
+          onAction={() => {
+            setLoading(true);
+            load();
+          }}
+        />
+      </SafeAreaView>
+    );
+  }
+
+  const d = data;
+  const lowCount = d.lowStock + d.outOfStock;
+
+  return (
+    <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={{ padding: 16, paddingBottom: 40 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      >
+        {/* ============ EXECUTIVE SUMMARY HERO ============ */}
+        <View className="overflow-hidden rounded-3xl bg-slate-900 p-5">
+          <View className="absolute -right-16 -top-16 h-48 w-48 rounded-full bg-indigo-500/20" />
+          <View className="flex-row items-start">
+            <View className="h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500">
+              <Feather name="bar-chart-2" size={24} color="white" />
             </View>
-
-            <View className="w-10 ml-3 h-2.5 rounded-full shrink-0 bg-slate-100" />
-
+            <View className="ml-3 min-w-0 flex-1">
+              <View className="flex-row items-center self-start rounded-full border border-white/10 bg-white/10 px-2.5 py-1">
+                <View className="mr-1.5 h-2 w-2 rounded-full bg-green-400" />
+                <Text className="text-[10px] font-semibold uppercase tracking-wider text-white">
+                  ReadyTech Executive Overview
+                </Text>
+              </View>
+              <Text className="mt-2 text-2xl font-bold text-white">Executive Dashboard</Text>
+            </View>
+            <Pressable
+              onPress={handleLogout}
+              hitSlop={6}
+              className="h-10 w-10 items-center justify-center rounded-xl bg-white/10 active:opacity-80"
+            >
+              <Feather name="log-out" size={18} color="white" />
+            </Pressable>
           </View>
 
+          <Text className="mt-3 text-sm leading-5 text-slate-300">
+            A unified real-time view across CRM and ERP — revenue, sales, pipeline, inventory and
+            procurement in one place.
+          </Text>
+
+          <View className="mt-4 self-start rounded-2xl border border-white/10 bg-white/10 px-3 py-2">
+            <Text className="text-xs text-slate-400">Last Synced</Text>
+            <Text className="text-sm font-semibold text-white">{d.syncedAt.toLocaleString()}</Text>
+          </View>
+
+          <View className="mt-5 flex-row flex-wrap" style={{ gap: 10 }}>
+            <HeroStat label="Total Revenue" value={inr(d.totalRevenue)} accent="text-emerald-300" />
+            <HeroStat label="Pipeline Value" value={inr(d.pipelineValue)} accent="text-indigo-300" />
+            <HeroStat label="Sales Orders" value={num(d.salesOrders)} accent="text-white" />
+            <HeroStat label="Active Clients" value={num(d.activeClients)} accent="text-cyan-300" />
+          </View>
+        </View>
+
+        {/* ============ KPI GROUPS ============ */}
+        {kpiGroups(d).map((group) => (
+          <View key={group.title} className="mt-6">
+            <View className="mb-3 flex-row items-center">
+              <Text className="text-xs font-bold uppercase tracking-[2px] text-slate-500">
+                {group.title} KPIs
+              </Text>
+              <View className="ml-3 h-px flex-1 bg-slate-200" />
+            </View>
+            <View className="flex-row flex-wrap" style={{ gap: 12 }}>
+              {group.items.map((k) => (
+                <View key={k.label} style={{ flexBasis: '47%', flexGrow: 1 }}>
+                  <StatCard
+                    label={k.label}
+                    value={k.value}
+                    icon={k.icon}
+                    tint={TONES[k.tone].tint}
+                    iconColor={TONES[k.tone].color}
+                    hint={k.hint}
+                    danger={k.danger}
+                    onPress={k.to ? () => router.push(k.to!) : undefined}
+                  />
+                </View>
+              ))}
+            </View>
+          </View>
         ))}
 
-      </View>
+        {/* ============ CHARTS ============ */}
+        <SectionCard title="Monthly Revenue Trend" subtitle="Consolidated sales revenue by month" badge="Live">
+          {d.salesTrend.length ? (
+            <RevenueChart data={d.salesTrend} />
+          ) : (
+            <Empty icon="trending-up" title="No revenue yet" subtitle="Sales revenue will appear here once orders are placed." />
+          )}
+        </SectionCard>
 
-    ) : data?.activities?.length ? (
+        <SectionCard title="Lead Status" subtitle="Distribution across the funnel" badge="CRM">
+          {d.leadStatusData.length ? (
+            <LeadStatusChart data={d.leadStatusData} />
+          ) : (
+            <Empty icon="users" title="No leads yet" subtitle="Lead insights will appear once leads are added." />
+          )}
+        </SectionCard>
 
-      data.activities.map((activity, index) => (
+        <SectionCard title="Inventory Distribution" subtitle="Current stock levels by product" badge="Real Time">
+          {d.stockChart.length ? (
+            <StockChart data={d.stockChart} />
+          ) : (
+            <Empty icon="layers" title="No inventory data" subtitle="Stock levels will appear here once inventory is recorded." />
+          )}
+        </SectionCard>
 
-        <View
-          key={activity._id}
-          className={
-            index !== data.activities.length - 1
-              ? "border-b border-slate-100"
-              : ""
-          }
+        {/* ============ RECENT SALES + ACTIVITY ============ */}
+        <SectionCard title="Recent Sales" subtitle="Latest customer orders">
+          {d.recentSales.length ? (
+            d.recentSales.map((so, i) => (
+              <View key={so._id} className={`flex-row items-center py-3 ${i ? 'border-t border-slate-100' : ''}`}>
+                <View className="h-9 w-9 items-center justify-center rounded-xl bg-indigo-500">
+                  <Text className="text-xs font-bold text-white">
+                    {(so.customer?.name || '?').charAt(0).toUpperCase()}
+                  </Text>
+                </View>
+                <View className="ml-3 min-w-0 flex-1">
+                  <Text className="text-sm font-medium text-slate-800" numberOfLines={1}>
+                    {so.customer?.name || 'Unknown Customer'}
+                  </Text>
+                  <Text className="text-xs text-slate-500" numberOfLines={1}>{so.soNumber || 'Sales Order'}</Text>
+                </View>
+                <View className="ml-2 items-end">
+                  <Text className="text-sm font-semibold text-emerald-600">{inr(so.amount)}</Text>
+                  <Text className="text-[11px] text-slate-400">{shortDate(so.createdAt)}</Text>
+                </View>
+              </View>
+            ))
+          ) : (
+            <Empty icon="shopping-cart" title="No sales yet" subtitle="Recent orders will appear here." />
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title="Recent Activities"
+          subtitle="Latest CRM interactions"
+          action={{ label: 'View all', onPress: () => router.push('/salesforce/activities') }}
         >
-          <ActivityRow activity={activity} />
-        </View>
-
-      ))
-
-    ) : (
-
-      <View className="items-center px-8 py-14">
-
-        <View className="items-center justify-center w-16 h-16 rounded-2xl bg-slate-100">
-
-          <Feather
-            name="activity"
-            size={26}
-            color="#94A3B8"
-          />
-
-        </View>
-
-        <Text className="mt-4 text-base font-semibold text-slate-800">
-          No Recent Activities
-        </Text>
-
-        <Text className="mt-1.5 text-sm leading-5 text-center text-slate-400">
-          New CRM updates and user actions will appear here.
-        </Text>
-
-      </View>
-
-    )}
-
-  </View>
-
-</View>
-
-{/* ===================== UPCOMING FOLLOW-UPS ===================== */}
-
-<View className={SECTION_GAP}>
-
-  <SectionHeader
-    title="Upcoming Follow-ups"
-    subtitle="Stay on top of your scheduled customer interactions"
-    actionLabel="View All"
-    onAction={() => router.push('/tasks')}
-  />
-
-  {/* Card */}
-
-  <View className="overflow-hidden bg-white border shadow-sm rounded-3xl border-slate-100">
-
-    {/* Example Row */}
-
-    <View className="flex-row items-center px-5 py-4 border-b border-slate-100">
-
-      <View className="items-center justify-center w-12 h-12 bg-indigo-100 shrink-0 rounded-2xl">
-
-        <Feather
-          name="phone-call"
-          size={22}
-          color="#4F46E5"
-        />
-
-      </View>
-
-      <View className="flex-1 min-w-0 ml-3">
-
-        <Text className="text-sm font-bold text-slate-900" numberOfLines={1}>
-          Call John Anderson
-        </Text>
-
-        <Text className="mt-0.5 text-xs text-slate-500" numberOfLines={1}>
-          Discuss quotation approval
-        </Text>
-
-      </View>
-
-      <View className="items-end ml-3 shrink-0">
-
-        <Text className="text-xs font-semibold text-indigo-600">
-          Today
-        </Text>
-
-        <Text className="mt-0.5 text-[11px] text-slate-400">
-          2:30 PM
-        </Text>
-
-      </View>
-
-    </View>
-
-    {/* Row 2 */}
-
-    <View className="flex-row items-center px-5 py-4">
-
-      <View className="items-center justify-center w-12 h-12 shrink-0 rounded-2xl bg-emerald-100">
-
-        <Feather
-          name="mail"
-          size={22}
-          color="#16A34A"
-        />
-
-      </View>
-
-      <View className="flex-1 min-w-0 ml-3">
-
-        <Text className="text-sm font-bold text-slate-900" numberOfLines={1}>
-          Send Proposal
-        </Text>
-
-        <Text className="mt-0.5 text-xs text-slate-500" numberOfLines={1}>
-          ReadyTech ERP Package
-        </Text>
-
-      </View>
-
-      <View className="items-end ml-3 shrink-0">
-
-        <Text className="text-xs font-semibold text-emerald-600">
-          Tomorrow
-        </Text>
-
-        <Text className="mt-0.5 text-[11px] text-slate-400">
-          10:00 AM
-        </Text>
-
-      </View>
-
-    </View>
-
-  </View>
-
-</View>
-
-{/* ===================== AI BUSINESS INSIGHTS ===================== */}
-
-<View className={SECTION_GAP}>
-
-  <SectionHeader
-    title="AI Business Insights"
-    subtitle="Smart recommendations powered by ReadyTech AI"
-    badge={
-      <View className="px-3 py-2 rounded-full bg-violet-100">
-
-        <Text className="text-xs font-bold text-violet-700">
-          AI
-        </Text>
-
-      </View>
-    }
-  />
-
-  {/* AI Card */}
-
-  <View className="p-5 overflow-hidden bg-white border shadow-sm rounded-3xl border-slate-100">
-
-    <View className="absolute rounded-full -top-10 -right-10 w-28 h-28 bg-violet-50" />
-
-    {/* AI Header */}
-
-    <View className="flex-row items-center">
-
-      <View className="items-center justify-center w-12 h-12 shrink-0 rounded-2xl bg-violet-100">
-
-        <Feather
-          name="cpu"
-          size={22}
-          color="#7C3AED"
-        />
-
-      </View>
-
-      <View className="flex-1 min-w-0 ml-3">
-
-        <Text className="text-base font-bold text-slate-900" numberOfLines={1}>
-          ReadyTech AI Assistant
-        </Text>
-
-        <Text className="text-xs text-slate-500" numberOfLines={1}>
-          Business health summary
-        </Text>
-
-      </View>
-
-    </View>
-
-    {/* Insights — dots align to the first text line, not the block centre */}
-
-    <View className="mt-5" style={{ gap: 12 }}>
-
-      <View className="flex-row items-start">
-
-        <View className="w-2 h-2 mt-1.5 mr-3 bg-green-500 rounded-full shrink-0" />
-
-        <Text className="flex-1 text-sm leading-5 text-slate-700">
-          Revenue increased by <Text className="font-bold">18%</Text> this month.
-        </Text>
-
-      </View>
-
-      <View className="flex-row items-start">
-
-        <View className="w-2 h-2 mt-1.5 mr-3 bg-orange-500 rounded-full shrink-0" />
-
-        <Text className="flex-1 text-sm leading-5 text-slate-700">
-          <Text className="font-bold">5 invoices</Text> are awaiting payment.
-        </Text>
-
-      </View>
-
-      <View className="flex-row items-start">
-
-        <View className="w-2 h-2 mt-1.5 mr-3 bg-blue-500 rounded-full shrink-0" />
-
-        <Text className="flex-1 text-sm leading-5 text-slate-700">
-          <Text className="font-bold">3 opportunities</Text> have high conversion potential.
-        </Text>
-
-      </View>
-
-      {/* Low stock alert */}
-      <View className="flex-row items-start">
-
-        <View className="w-2 h-2 mt-1.5 mr-3 bg-red-500 rounded-full shrink-0" />
-
-        <Text className="flex-1 text-sm leading-5 text-slate-700">
-          Inventory is low for <Text className="font-bold">2 products</Text>.
-        </Text>
-
-      </View>
-
-    </View>
-
-    {/* Button */}
-
-    <Pressable className="flex-row items-center justify-center py-3.5 mt-6 bg-indigo-600 rounded-2xl active:opacity-80">
-
-      <Feather
-        name="zap"
-        size={18}
-        color="white"
-      />
-
-      <Text className="ml-2 text-sm font-semibold text-white">
-        Generate AI Report
-      </Text>
-
-    </Pressable>
-
-  </View>
-
-</View>
-
-
-
-</ScrollView>
-
-
-</SafeAreaView>
-
-
-);
-
+          {d.recentActivities.length ? (
+            d.recentActivities.map((a, i) => {
+              const ic = ACTIVITY_ICON[a.type ?? ''] ?? { icon: 'activity' as const, color: '#94a3b8' };
+              return (
+                <View key={a.id} className={`flex-row items-center py-3 ${i ? 'border-t border-slate-100' : ''}`}>
+                  <View className="h-9 w-9 items-center justify-center rounded-full bg-slate-50">
+                    <Feather name={ic.icon} size={15} color={ic.color} />
+                  </View>
+                  <View className="ml-3 min-w-0 flex-1">
+                    <Text className="text-sm font-medium text-slate-800" numberOfLines={1}>{a.title}</Text>
+                    <Text className="text-xs text-slate-500" numberOfLines={1}>{a.desc}</Text>
+                  </View>
+                  <Text className="ml-2 text-[11px] text-slate-400">{shortDate(a.time)}</Text>
+                </View>
+              );
+            })
+          ) : (
+            <Empty icon="activity" title="No activity yet" subtitle="CRM activity will appear here." />
+          )}
+        </SectionCard>
+
+        {/* ============ TOP PRODUCTS + TOP CUSTOMERS ============ */}
+        <SectionCard title="Top Products" subtitle="Best performers by revenue">
+          {d.topProducts.length ? (
+            d.topProducts.map((p, i) => (
+              <RankRow key={p.name} rank={i + 1} title={p.name} subtitle={`${num(p.units)} units sold`} value={inr(p.revenue)} />
+            ))
+          ) : (
+            <Empty icon="star" title="No product sales" subtitle="Top products appear once orders include items." />
+          )}
+        </SectionCard>
+
+        <SectionCard title="Top Customers" subtitle="Highest revenue accounts">
+          {d.topCustomers.length ? (
+            d.topCustomers.map((c, i) => (
+              <RankRow key={c.name} rank={i + 1} title={c.name} subtitle={`${num(c.orders)} orders`} value={inr(c.revenue)} />
+            ))
+          ) : (
+            <Empty icon="users" title="No customers yet" subtitle="Top customers appear once orders are placed." />
+          )}
+        </SectionCard>
+
+        {/* ============ LOW STOCK ALERTS ============ */}
+        <SectionCard
+          title="Low Stock Alerts"
+          subtitle="Items at or below their reorder limit"
+          badge={d.lowStockRows.length ? `${lowCount} items` : 'Healthy'}
+          badgeTone={d.lowStockRows.length ? 'amber' : 'emerald'}
+          action={{ label: 'Manage', onPress: () => router.push('/inventory') }}
+        >
+          {d.lowStockRows.length ? (
+            d.lowStockRows.map((r, i) => {
+              const out = r.qty <= 0;
+              return (
+                <View key={i} className={`flex-row items-center py-2.5 ${i ? 'border-t border-slate-100' : ''}`}>
+                  <View className="min-w-0 flex-1">
+                    <Text className="text-sm font-medium text-slate-800" numberOfLines={1}>{r.name}</Text>
+                    <Text className="text-xs text-slate-500" numberOfLines={1}>
+                      {r.warehouse} · Limit {r.limit}
+                    </Text>
+                  </View>
+                  <Text className={`mx-3 text-sm font-semibold ${out ? 'text-red-600' : 'text-amber-600'}`}>{r.qty}</Text>
+                  <Text
+                    className={`rounded-full px-2.5 py-1 text-xs font-semibold ${
+                      out ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
+                    }`}
+                  >
+                    {out ? 'Out of Stock' : 'Low'}
+                  </Text>
+                </View>
+              );
+            })
+          ) : (
+            <Empty icon="shield" title="All stock healthy" subtitle="No products are below their reorder limit." />
+          )}
+        </SectionCard>
+
+        {/* ============ QUICK ACTIONS ============ */}
+        <SectionCard title="Quick Actions" subtitle="Jump straight into daily workflows">
+          <View className="flex-row flex-wrap" style={{ gap: 10 }}>
+            {QUICK_ACTIONS.map((a) => (
+              <View key={a.label} style={{ width: '31%' }}>
+                <QuickAction label={a.label} icon={a.icon} color="#4f46e5" onPress={() => router.push(a.to)} />
+              </View>
+            ))}
+          </View>
+        </SectionCard>
+      </ScrollView>
+    </SafeAreaView>
+  );
 }

@@ -44,7 +44,98 @@ export interface InvoiceFormItem {
   taxPercent: number;
 }
 
+/** Existing client (linked) vs. a one-off walk-in buyer typed by hand. */
+export type ClientMode = 'existing' | 'walkin';
+
+export interface InvoiceAddress {
+  addressLine1: string;
+  addressLine2: string;
+  city: string;
+  state: string;
+  pincode: string;
+  country: string;
+}
+
+/**
+ * Editable buyer snapshot. Auto-filled from the selected client but kept in
+ * form state so it stays editable right up to save — the API already prefers
+ * `billingDetails.*` over the linked client's own fields.
+ */
+export interface BillingDetailsState {
+  companyName: string;
+  contactPerson: string;
+  gstNumber: string;
+  panNumber: string;
+  email: string;
+  phone: string;
+  billingAddress: InvoiceAddress;
+  shippingAddress: InvoiceAddress;
+}
+
+export function emptyAddress(): InvoiceAddress {
+  return {
+    addressLine1: '',
+    addressLine2: '',
+    city: '',
+    state: '',
+    pincode: '',
+    country: 'India',
+  };
+}
+
+export function emptyBillingDetails(): BillingDetailsState {
+  return {
+    companyName: '',
+    contactPerson: '',
+    gstNumber: '',
+    panNumber: '',
+    email: '',
+    phone: '',
+    billingAddress: emptyAddress(),
+    shippingAddress: emptyAddress(),
+  };
+}
+
+/**
+ * Maps a selected client onto the editable billing block. Address fallback
+ * chains match the ones the web CreateInvoice page uses.
+ */
+export function billingFromClient(client: Client): BillingDetailsState {
+  const b = (client.billingAddress ?? {}) as any;
+  const s = (client.shippingAddress ?? {}) as any;
+
+  const billingAddress: InvoiceAddress = {
+    addressLine1: b.addressLine1 || b.address || (client as any).address || '',
+    addressLine2: b.addressLine2 || '',
+    city: b.city || '',
+    state: b.state || '',
+    pincode: b.pincode || '',
+    country: b.country || 'India',
+  };
+
+  return {
+    companyName: client.companyName || '',
+    contactPerson: client.contactPerson || '',
+    gstNumber: client.gstNumber || '',
+    panNumber: client.panNumber || '',
+    email: client.email || '',
+    phone: client.phone || '',
+    billingAddress,
+    shippingAddress: {
+      addressLine1:
+        s.addressLine1 || s.address || s.street || billingAddress.addressLine1,
+      addressLine2: s.addressLine2 || '',
+      city: s.city || billingAddress.city,
+      state: s.state || billingAddress.state,
+      pincode: s.pincode || billingAddress.pincode,
+      country: s.country || 'India',
+    },
+  };
+}
+
 export interface InvoiceFormState {
+  clientMode: ClientMode;
+  billing: BillingDetailsState;
   customer: string;
   invoiceType: (typeof INVOICE_TYPES)[number];
   orderNumber: string;
@@ -67,6 +158,8 @@ export interface InvoiceFormState {
 export function createInvoiceState(): InvoiceFormState {
   const today = new Date().toISOString().split('T')[0];
   return {
+    clientMode: 'existing',
+    billing: emptyBillingDetails(),
     customer: '',
     invoiceType: 'Subscription',
     orderNumber: '',
@@ -159,7 +252,12 @@ export function validateInvoiceForm(
   state: InvoiceFormState,
   client: Client | undefined
 ): string | null {
-  if (!client) return 'Please select customer';
+  if (state.clientMode === 'existing') {
+    if (!client) return 'Please select customer';
+  } else if (!state.billing.companyName.trim()) {
+    return 'Please enter the customer / company name';
+  }
+
   if (!state.items || state.items.length === 0) return 'Please add invoice items';
 
   for (let i = 0; i < state.items.length; i++) {
@@ -175,35 +273,17 @@ export function validateInvoiceForm(
 }
 
 /* ================= Build the POST payload (matches web payload exactly) ================= */
-export function buildInvoicePayload(state: InvoiceFormState, client: Client) {
-  const billing = {
-    addressLine1:
-      client.billingAddress?.addressLine1 ||
-      (client.billingAddress as any)?.address ||
-      (client as any).address ||
-      '',
-    addressLine2: client.billingAddress?.addressLine2 || '',
-    city: client.billingAddress?.city || '',
-    state: client.billingAddress?.state || '',
-    pincode: client.billingAddress?.pincode || '',
-    country: client.billingAddress?.country || 'India',
-  };
-
-  const shipping = {
-    addressLine1:
-      client.shippingAddress?.addressLine1 ||
-      (client.shippingAddress as any)?.address ||
-      (client.shippingAddress as any)?.street ||
-      '',
-    addressLine2: client.shippingAddress?.addressLine2 || '',
-    city: client.shippingAddress?.city || '',
-    state: client.shippingAddress?.state || '',
-    pincode: client.shippingAddress?.pincode || '',
-    country: client.shippingAddress?.country || 'India',
-  };
+export function buildInvoicePayload(
+  state: InvoiceFormState,
+  client: Client | undefined
+) {
+  // Snapshot comes from the (editable) form block, not the client record, so
+  // any edits made after auto-fill are the ones that get saved.
+  const billing = state.billing.billingAddress;
+  const shipping = state.billing.shippingAddress;
 
   return {
-    customer: client._id,
+    customer: client?._id ?? '',
     invoiceType: state.invoiceType || 'Subscription',
     orderNumber: state.orderNumber || '',
     purchaseDate: state.purchaseDate || new Date(),
@@ -217,28 +297,29 @@ export function buildInvoicePayload(state: InvoiceFormState, client: Client) {
     termsAndConditions: state.termsAndConditions || '',
     companyDetails: { ...COMPANY_DETAILS },
     billingDetails: {
-      companyName: client.companyName || '',
-      contactPerson: client.contactPerson || '',
-      email: client.email || '',
-      phone: client.phone || '',
+      companyName: state.billing.companyName || '',
+      contactPerson: state.billing.contactPerson || '',
+      email: state.billing.email || '',
+      phone: state.billing.phone || '',
       addressLine1: billing.addressLine1 || '',
       addressLine2: billing.addressLine2 || '',
       city: billing.city || '',
       state: billing.state || '',
       pincode: billing.pincode || '',
       country: billing.country || 'India',
-      gstNumber: client.gstNumber || '',
-      panNumber: client.panNumber || '',
+      gstNumber: state.billing.gstNumber || '',
+      panNumber: state.billing.panNumber || '',
     },
     shippingDetails: {
-      companyName: client.companyName || '',
-      contactPerson: client.contactPerson || '',
-      phone: client.phone || '',
+      companyName: state.billing.companyName || '',
+      contactPerson: state.billing.contactPerson || '',
+      phone: state.billing.phone || '',
       addressLine1: shipping.addressLine1 || billing.addressLine1 || '',
+      addressLine2: shipping.addressLine2 || billing.addressLine2 || '',
       city: shipping.city || billing.city || '',
       state: shipping.state || billing.state || '',
       pincode: shipping.pincode || billing.pincode || '',
-      country: 'India',
+      country: shipping.country || billing.country || 'India',
     },
     items: state.items.map((item) => {
       const qty = Number(item.quantity || 1);

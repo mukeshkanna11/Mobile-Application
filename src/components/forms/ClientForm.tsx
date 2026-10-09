@@ -1,7 +1,9 @@
+import { Feather } from '@expo/vector-icons';
 import { useState } from 'react';
 import {
   KeyboardAvoidingView,
   Platform,
+  Pressable,
   ScrollView,
   Text,
   View,
@@ -57,6 +59,16 @@ export default function ClientForm({
       ...f,
       billingAddress: { ...f.billingAddress, [key]: value },
     }));
+
+  const setShipping = (key: keyof Address, value: string) =>
+    setForm((f) => ({
+      ...f,
+      shippingAddress: { ...f.shippingAddress, [key]: value },
+    }));
+
+  /** Copies billing → shipping so the common case is one tap. */
+  const copyBillingToShipping = () =>
+    setForm((f) => ({ ...f, shippingAddress: { ...f.billingAddress } }));
 
   const handleSubmit = async () => {
     if (!form.companyName.trim() || !form.contactPerson.trim()) {
@@ -130,12 +142,144 @@ export default function ClientForm({
           placeholder="https://…"
           autoCapitalize="none"
         />
+
+        <SectionTitle>Tax Information</SectionTitle>
         <FormField
-          label="Billing Address"
+          label="GST Number"
+          value={form.gstNumber}
+          onChangeText={(t) => set('gstNumber', t)}
+          placeholder="29ABCDE1234F1Z5"
+          autoCapitalize="characters"
+          autoCorrect={false}
+          maxLength={15}
+        />
+        <FormField
+          label="PAN Number"
+          value={form.panNumber}
+          onChangeText={(t) => set('panNumber', t)}
+          placeholder="ABCDE1234F"
+          autoCapitalize="characters"
+          autoCorrect={false}
+          maxLength={10}
+        />
+
+        <SectionTitle>Billing Address</SectionTitle>
+        <FormField
+          label="Address Line 1"
           value={form.billingAddress.addressLine1 ?? ''}
           onChangeText={(t) => setBilling('addressLine1', t)}
           placeholder="Street, area"
         />
+        <FormField
+          label="Address Line 2"
+          value={form.billingAddress.addressLine2 ?? ''}
+          onChangeText={(t) => setBilling('addressLine2', t)}
+          placeholder="Landmark, building"
+        />
+        <View className="flex-row" style={{ gap: 12 }}>
+          <View className="flex-1">
+            <FormField
+              label="City"
+              value={form.billingAddress.city ?? ''}
+              onChangeText={(t) => setBilling('city', t)}
+              placeholder="Coimbatore"
+            />
+          </View>
+          <View className="flex-1">
+            <FormField
+              label="State"
+              value={form.billingAddress.state ?? ''}
+              onChangeText={(t) => setBilling('state', t)}
+              placeholder="Tamil Nadu"
+            />
+          </View>
+        </View>
+        <View className="flex-row" style={{ gap: 12 }}>
+          <View className="flex-1">
+            <FormField
+              label="Pincode"
+              value={form.billingAddress.pincode ?? ''}
+              onChangeText={(t) => setBilling('pincode', t)}
+              placeholder="641004"
+              keyboardType="number-pad"
+              maxLength={6}
+            />
+          </View>
+          <View className="flex-1">
+            <FormField
+              label="Country"
+              value={form.billingAddress.country ?? ''}
+              onChangeText={(t) => setBilling('country', t)}
+              placeholder="India"
+            />
+          </View>
+        </View>
+
+        <View className="mb-3 mt-2 flex-row items-center justify-between">
+          <Text className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Shipping Address
+          </Text>
+          <Pressable
+            onPress={copyBillingToShipping}
+            hitSlop={6}
+            className="flex-row items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 active:opacity-80"
+          >
+            <Feather name="copy" size={13} color="#4f46e5" />
+            <Text className="text-xs font-medium text-indigo-600">
+              Same as billing
+            </Text>
+          </Pressable>
+        </View>
+        <FormField
+          label="Address Line 1"
+          value={form.shippingAddress.addressLine1 ?? ''}
+          onChangeText={(t) => setShipping('addressLine1', t)}
+          placeholder="Street, area"
+        />
+        <FormField
+          label="Address Line 2"
+          value={form.shippingAddress.addressLine2 ?? ''}
+          onChangeText={(t) => setShipping('addressLine2', t)}
+          placeholder="Landmark, building"
+        />
+        <View className="flex-row" style={{ gap: 12 }}>
+          <View className="flex-1">
+            <FormField
+              label="City"
+              value={form.shippingAddress.city ?? ''}
+              onChangeText={(t) => setShipping('city', t)}
+              placeholder="Coimbatore"
+            />
+          </View>
+          <View className="flex-1">
+            <FormField
+              label="State"
+              value={form.shippingAddress.state ?? ''}
+              onChangeText={(t) => setShipping('state', t)}
+              placeholder="Tamil Nadu"
+            />
+          </View>
+        </View>
+        <View className="flex-row" style={{ gap: 12 }}>
+          <View className="flex-1">
+            <FormField
+              label="Pincode"
+              value={form.shippingAddress.pincode ?? ''}
+              onChangeText={(t) => setShipping('pincode', t)}
+              placeholder="641004"
+              keyboardType="number-pad"
+              maxLength={6}
+            />
+          </View>
+          <View className="flex-1">
+            <FormField
+              label="Country"
+              value={form.shippingAddress.country ?? ''}
+              onChangeText={(t) => setShipping('country', t)}
+              placeholder="India"
+            />
+          </View>
+        </View>
 
         <SectionTitle>Business Information</SectionTitle>
         <Segmented<ClientType>
@@ -153,18 +297,6 @@ export default function ClientForm({
           options={STATUSES}
           value={form.status}
           onChange={(v) => set('status', v)}
-        />
-        <FormField
-          label="GST Number"
-          value={form.gstNumber}
-          onChangeText={(t) => set('gstNumber', t)}
-          autoCapitalize="characters"
-        />
-        <FormField
-          label="PAN Number"
-          value={form.panNumber}
-          onChangeText={(t) => set('panNumber', t)}
-          autoCapitalize="characters"
         />
 
         <SectionTitle>Subscription</SectionTitle>

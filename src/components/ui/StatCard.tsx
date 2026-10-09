@@ -23,6 +23,12 @@ interface StatCardProps {
 
   loading?: boolean;
 
+  /** Secondary line under the label, e.g. "12 active". */
+  hint?: string;
+
+  /** Renders the value in red (e.g. low / out-of-stock counts). */
+  danger?: boolean;
+
   /**
    * Card click navigation
    */
@@ -33,7 +39,7 @@ interface StatCardProps {
  * Fixed height so every tile in the KPI grid lines up, whether it holds a
  * single digit ("6") or a wrapped currency string ("₹1,23,456").
  */
-const CARD_HEIGHT = 124;
+const CARD_HEIGHT = 140;
 
 /**
  * Dashboard KPI Metric Card
@@ -52,6 +58,8 @@ export default function StatCard({
   tint,
   iconColor,
   loading = false,
+  hint,
+  danger = false,
   onPress,
 }: StatCardProps) {
   return (
@@ -77,7 +85,7 @@ export default function StatCard({
             numberOfLines={1}
             adjustsFontSizeToFit
             minimumFontScale={0.7}
-            className="text-2xl font-bold text-slate-900"
+            className={`text-2xl font-bold ${danger ? 'text-red-600' : 'text-slate-900'}`}
           >
             {value}
           </Text>
@@ -87,6 +95,11 @@ export default function StatCard({
         <Text numberOfLines={1} className="mt-0.5 text-sm text-slate-500">
           {label}
         </Text>
+        {hint ? (
+          <Text numberOfLines={1} className="text-[11px] text-slate-400">
+            {hint}
+          </Text>
+        ) : null}
       </View>
     </Pressable>
   );

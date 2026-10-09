@@ -29,10 +29,10 @@ export default function AuditLogCard({ log }: { log: AuditLog }) {
   const ip = ipOf(log);
 
   return (
-    <View className="mb-3 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+    <View className="p-4 mb-3 bg-white border shadow-sm rounded-3xl border-slate-200">
       {/* EVENT + TIMESTAMP */}
       <View className="flex-row items-start">
-        <View className="min-w-0 flex-1">
+        <View className="flex-1 min-w-0">
           <Text
             className="text-sm font-semibold text-slate-900"
             numberOfLines={2}
@@ -44,7 +44,7 @@ export default function AuditLogCard({ log }: { log: AuditLog }) {
           </Text>
         </View>
 
-        <View className="ml-3 shrink-0 items-end">
+        <View className="items-end ml-3 shrink-0">
           <Text className="text-[11px] font-medium text-slate-500">
             {formatDate(log.createdAt)}
           </Text>
@@ -53,9 +53,9 @@ export default function AuditLogCard({ log }: { log: AuditLog }) {
           </Text>
         </View>
       </View>
-
+ 
       {/* USER */}
-      <View className="mt-3 flex-row items-center">
+      <View className="flex-row items-center mt-3">
         <LinearGradient
           colors={['#4f46e5', '#2563eb']}
           start={{ x: 0, y: 0 }}
@@ -89,7 +89,7 @@ export default function AuditLogCard({ log }: { log: AuditLog }) {
       </View>
 
       {/* ACTION · MODULE · SEVERITY */}
-      <View className="mt-3 flex-row flex-wrap items-center gap-2 border-t border-slate-100 pt-3">
+      <View className="flex-row flex-wrap items-center gap-2 pt-3 mt-3 border-t border-slate-100">
         <View className="rounded-full bg-blue-100 px-2.5 py-1">
           <Text className="text-[11px] font-semibold text-blue-700">
             {log.action}

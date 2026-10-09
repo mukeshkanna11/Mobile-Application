@@ -22,18 +22,33 @@ import Segmented from '@/components/ui/Segmented';
 import { fetchClients, type Client } from '@/services/clients';
 import { createInvoice, money } from '@/services/invoices';
 import {
+  billingFromClient,
   buildInvoicePayload,
   computeInvoiceTotals,
   createInvoiceState,
   DISCOUNT_TYPES,
+  emptyBillingDetails,
   emptyItem,
   INVOICE_TYPES,
   PAYMENT_MODES,
   TAX_TYPES,
   validateInvoiceForm,
+  type BillingDetailsState,
+  type ClientMode,
+  type InvoiceAddress,
   type InvoiceFormItem,
   type InvoiceFormState,
 } from '@/services/invoiceForm';
+
+/** Segmented renders raw option strings, so map labels ⇄ mode values here. */
+const MODE_LABELS = ['Existing Client', 'New / Walk-in'] as const;
+type ModeLabel = (typeof MODE_LABELS)[number];
+
+const modeToLabel = (mode: ClientMode): ModeLabel =>
+  mode === 'existing' ? 'Existing Client' : 'New / Walk-in';
+
+const labelToMode = (label: ModeLabel): ClientMode =>
+  label === 'Existing Client' ? 'existing' : 'walkin';
 
 function SectionTitle({ children }: { children: string }) {
   return (
@@ -103,6 +118,61 @@ export default function CreateInvoiceScreen() {
 
   const totals = useMemo(() => computeInvoiceTotals(invoice), [invoice]);
 
+  /** Patch a top-level billing field (company name, GST, email…). */
+  const setBillingField = <K extends keyof BillingDetailsState>(
+    key: K,
+    value: BillingDetailsState[K]
+  ) =>
+    setInvoice((prev) => ({
+      ...prev,
+      billing: { ...prev.billing, [key]: value },
+    }));
+
+  const setAddress = (
+    which: 'billingAddress' | 'shippingAddress',
+    key: keyof InvoiceAddress,
+    value: string
+  ) =>
+    setInvoice((prev) => ({
+      ...prev,
+      billing: {
+        ...prev.billing,
+        [which]: { ...prev.billing[which], [key]: value },
+      },
+    }));
+
+  const copyBillingToShipping = () =>
+    setInvoice((prev) => ({
+      ...prev,
+      billing: {
+        ...prev.billing,
+        shippingAddress: { ...prev.billing.billingAddress },
+      },
+    }));
+
+  /** Switching mode clears the other mode's buyer data so nothing leaks over. */
+  const changeMode = (mode: ClientMode) =>
+    setInvoice((prev) =>
+      prev.clientMode === mode
+        ? prev
+        : {
+            ...prev,
+            clientMode: mode,
+            customer: '',
+            billing: emptyBillingDetails(),
+          }
+    );
+
+  /** Task 4: selecting a client auto-fills every billing field, still editable. */
+  const selectClient = (id: string) => {
+    const client = clients.find((c) => String(c._id) === String(id));
+    setInvoice((prev) => ({
+      ...prev,
+      customer: id,
+      billing: client ? billingFromClient(client) : emptyBillingDetails(),
+    }));
+  };
+
   const clientOptions: PickerOption[] = useMemo(
     () =>
       clients.map((c) => ({
@@ -123,7 +193,7 @@ export default function CreateInvoiceScreen() {
     }
     try {
       setSaving(true);
-      await createInvoice(buildInvoicePayload(invoice, client!));
+      await createInvoice(buildInvoicePayload(invoice, client));
       Toast.show({ type: 'success', text1: 'Invoice Created Successfully' });
       router.back();
     } catch (error: any) {
@@ -155,15 +225,196 @@ export default function CreateInvoiceScreen() {
           showsVerticalScrollIndicator={false}
         >
           <SectionTitle>Customer</SectionTitle>
-          <SearchablePicker
-            label="Customer"
-            required
-            placeholder="Select customer"
-            searchPlaceholder="Search customers…"
-            value={invoice.customer}
-            options={clientOptions}
-            onSelect={(v) => setField('customer', v)}
+          <Segmented<ModeLabel>
+            label="Billing To"
+            options={MODE_LABELS}
+            value={modeToLabel(invoice.clientMode)}
+            onChange={(label) => changeMode(labelToMode(label))}
           />
+
+          {invoice.clientMode === 'existing' ? (
+            <SearchablePicker
+              label="Customer"
+              required
+              placeholder="Select customer"
+              searchPlaceholder="Search customers…"
+              value={invoice.customer}
+              options={clientOptions}
+              onSelect={selectClient}
+            />
+          ) : (
+            <View className="mb-4 flex-row items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <Feather name="info" size={14} color="#b45309" />
+              <Text className="flex-1 text-xs leading-5 text-amber-800">
+                Walk-in details are saved on the invoice only — no client record
+                is created.
+              </Text>
+            </View>
+          )}
+
+          {/* ===== Billing Details (auto-filled, editable) ===== */}
+          <SectionTitle>Billing Details</SectionTitle>
+          <FormField
+            label="Company Name"
+            required
+            value={invoice.billing.companyName}
+            onChangeText={(t) => setBillingField('companyName', t)}
+            placeholder="Acme Pvt Ltd"
+          />
+          <FormField
+            label="Contact Person"
+            value={invoice.billing.contactPerson}
+            onChangeText={(t) => setBillingField('contactPerson', t)}
+            placeholder="Full name"
+          />
+          <FormField
+            label="GST Number"
+            value={invoice.billing.gstNumber}
+            onChangeText={(t) => setBillingField('gstNumber', t)}
+            placeholder="29ABCDE1234F1Z5"
+            autoCapitalize="characters"
+            autoCorrect={false}
+            maxLength={15}
+          />
+          <View className="flex-row" style={{ gap: 12 }}>
+            <View className="flex-1">
+              <FormField
+                label="Email"
+                value={invoice.billing.email}
+                onChangeText={(t) => setBillingField('email', t)}
+                placeholder="name@company.com"
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
+            </View>
+            <View className="flex-1">
+              <FormField
+                label="Phone"
+                value={invoice.billing.phone}
+                onChangeText={(t) => setBillingField('phone', t)}
+                placeholder="+91…"
+                keyboardType="phone-pad"
+              />
+            </View>
+          </View>
+
+          <SectionTitle>Billing Address</SectionTitle>
+          <FormField
+            label="Address Line 1"
+            value={invoice.billing.billingAddress.addressLine1}
+            onChangeText={(t) => setAddress('billingAddress', 'addressLine1', t)}
+            placeholder="Street, area"
+          />
+          <FormField
+            label="Address Line 2"
+            value={invoice.billing.billingAddress.addressLine2}
+            onChangeText={(t) => setAddress('billingAddress', 'addressLine2', t)}
+            placeholder="Landmark, building"
+          />
+          <View className="flex-row" style={{ gap: 12 }}>
+            <View className="flex-1">
+              <FormField
+                label="City"
+                value={invoice.billing.billingAddress.city}
+                onChangeText={(t) => setAddress('billingAddress', 'city', t)}
+                placeholder="Coimbatore"
+              />
+            </View>
+            <View className="flex-1">
+              <FormField
+                label="State"
+                value={invoice.billing.billingAddress.state}
+                onChangeText={(t) => setAddress('billingAddress', 'state', t)}
+                placeholder="Tamil Nadu"
+              />
+            </View>
+          </View>
+          <View className="flex-row" style={{ gap: 12 }}>
+            <View className="flex-1">
+              <FormField
+                label="Pincode"
+                value={invoice.billing.billingAddress.pincode}
+                onChangeText={(t) => setAddress('billingAddress', 'pincode', t)}
+                placeholder="641004"
+                keyboardType="number-pad"
+                maxLength={6}
+              />
+            </View>
+            <View className="flex-1">
+              <FormField
+                label="Country"
+                value={invoice.billing.billingAddress.country}
+                onChangeText={(t) => setAddress('billingAddress', 'country', t)}
+                placeholder="India"
+              />
+            </View>
+          </View>
+
+          <View className="mb-3 mt-2 flex-row items-center justify-between">
+            <Text className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Shipping Address
+            </Text>
+            <Pressable
+              onPress={copyBillingToShipping}
+              hitSlop={6}
+              className="flex-row items-center gap-1.5 rounded-lg bg-indigo-50 px-3 py-1.5 active:opacity-80"
+            >
+              <Feather name="copy" size={13} color="#4f46e5" />
+              <Text className="text-xs font-medium text-indigo-600">
+                Same as billing
+              </Text>
+            </Pressable>
+          </View>
+          <FormField
+            label="Address Line 1"
+            value={invoice.billing.shippingAddress.addressLine1}
+            onChangeText={(t) => setAddress('shippingAddress', 'addressLine1', t)}
+            placeholder="Street, area"
+          />
+          <FormField
+            label="Address Line 2"
+            value={invoice.billing.shippingAddress.addressLine2}
+            onChangeText={(t) => setAddress('shippingAddress', 'addressLine2', t)}
+            placeholder="Landmark, building"
+          />
+          <View className="flex-row" style={{ gap: 12 }}>
+            <View className="flex-1">
+              <FormField
+                label="City"
+                value={invoice.billing.shippingAddress.city}
+                onChangeText={(t) => setAddress('shippingAddress', 'city', t)}
+                placeholder="Coimbatore"
+              />
+            </View>
+            <View className="flex-1">
+              <FormField
+                label="State"
+                value={invoice.billing.shippingAddress.state}
+                onChangeText={(t) => setAddress('shippingAddress', 'state', t)}
+                placeholder="Tamil Nadu"
+              />
+            </View>
+          </View>
+          <View className="flex-row" style={{ gap: 12 }}>
+            <View className="flex-1">
+              <FormField
+                label="Pincode"
+                value={invoice.billing.shippingAddress.pincode}
+                onChangeText={(t) => setAddress('shippingAddress', 'pincode', t)}
+                placeholder="641004"
+                keyboardType="number-pad"
+                maxLength={6}
+              />
+            </View>
+            <View className="flex-1">
+              <FormField
+                label="Country"
+                value={invoice.billing.shippingAddress.country}
+                onChangeText={(t) => setAddress('shippingAddress', 'country', t)}
+                placeholder="India"
+              />
+            </View>
+          </View>
 
           <SectionTitle>Invoice Details</SectionTitle>
           <Segmented
