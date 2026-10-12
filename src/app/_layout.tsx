@@ -10,6 +10,8 @@ import { MD3LightTheme, PaperProvider } from 'react-native-paper';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 
+import SupportChatWidget from '@/components/ui/SupportChatWidget';
+
 SplashScreen.preventAutoHideAsync();
 
 const paperTheme = {
@@ -91,6 +93,8 @@ export default function RootLayout() {
           <Stack.Screen name="invoice/[id]" options={{ animation: 'slide_from_right' }} />
           <Stack.Screen name="invoice/create" options={{ animation: 'slide_from_bottom' }} />
         </Stack>
+        {/* Global floating support chat (web ChatSupportWidget); hidden on login. */}
+        <SupportChatWidget />
         <Toast />
       </PaperProvider>
     </SafeAreaProvider>

@@ -1,8 +1,11 @@
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
 
+import type { PickerOption } from '@/components/ui/SearchablePicker';
 import { API_URL } from '@/constants/config';
 import API from '@/services/api';
+import { fetchProducts, isForbidden, type Product } from '@/services/products';
+import { fetchWarehouses, warehousePickerOptions } from '@/services/warehouses';
 import { getItem, StorageKeys } from '@/services/storage';
 
 /**
@@ -184,4 +187,135 @@ export function inventoryStats(rows: StockRow[]) {
 
 export function formatMoney(x: unknown): string {
   return `₹${Number(x || 0).toLocaleString('en-IN')}`;
+}
+
+/* ================= Stock Adjustment & Warehouse Transfer =================
+ * Mirrors web pages/Stcoks/StockAdjustment.jsx and WarehouseTransfer.jsx:
+ *   POST /inventory/adjust    { product, warehouse, delta (±, non-zero), reason (required) }
+ *   POST /inventory/transfer  { product, fromWarehouse, toWarehouse, quantity (> 0), reason }
+ * Client checks use `available` (onHand − reserved) like the web, which is
+ * stricter than the backend's on-hand check so reserved stock is not moved.
+ */
+
+export interface StockFormData {
+  products: PickerOption[];
+  warehouses: PickerOption[];
+  summary: StockRow[];
+  /** /products is admin-only; non-admins only see products already in stock. */
+  productsRestricted: boolean;
+}
+
+/** Products, active warehouses and the stock summary for the two ERP forms. */
+export async function loadStockFormData(): Promise<StockFormData> {
+  const [summary, warehouses, productsRes] = await Promise.all([
+    fetchInventory(),
+    fetchWarehouses(),
+    fetchProducts().then(
+      (p) => ({ ok: true as const, p }),
+      (err) => {
+        if (!isForbidden(err)) throw err;
+        return { ok: false as const, p: [] as Product[] };
+      }
+    ),
+  ]);
+  const products: PickerOption[] = productsRes.ok
+    ? productsRes.p.map((p) => ({ label: p.name, sublabel: p.sku || undefined, value: p._id }))
+    : [...new Map(
+        summary
+          .filter((s) => s.product?._id)
+          .map((s) => [s.product!._id!, { label: s.product!.name ?? 'Product', sublabel: s.product!.sku || undefined, value: s.product!._id! }])
+      ).values()];
+  return {
+    products,
+    warehouses: warehousePickerOptions(warehouses),
+    summary,
+    productsRestricted: !productsRes.ok,
+  };
+}
+
+/** Web `available` lookup: null until both are chosen; 0 when no ledger row exists. */
+export function availableFor(rows: StockRow[], product: string, warehouse: string): number | null {
+  if (!product || !warehouse) return null;
+  const row = rows.find((s) => s.product?._id === product && s.warehouse?._id === warehouse);
+  return row ? (row.available ?? 0) : 0;
+}
+
+export type AdjustDirection = 'Increase' | 'Decrease';
+
+export interface AdjustInput {
+  product: string;
+  warehouse: string;
+  direction: AdjustDirection;
+  quantity: string;
+  reason: string;
+}
+
+export function validateAdjust(f: AdjustInput, available: number | null): string | null {
+  const qty = Number(f.quantity);
+  if (!f.product || !f.warehouse) return 'Select product and warehouse';
+  if (!Number.isFinite(qty) || qty <= 0) return 'Enter a valid quantity';
+  if (!f.reason.trim()) return 'A reason is required';
+  if (f.direction === 'Decrease' && available !== null && qty > available)
+    return `Cannot decrease more than available (${available})`;
+  return null;
+}
+
+export async function adjustStock(f: AdjustInput): Promise<void> {
+  const qty = Number(f.quantity);
+  await API.post('/inventory/adjust', {
+    product: f.product,
+    warehouse: f.warehouse,
+    delta: f.direction === 'Increase' ? qty : -qty,
+    reason: f.reason.trim(),
+  });
+}
+
+export interface TransferInput {
+  product: string;
+  fromWarehouse: string;
+  toWarehouse: string;
+  quantity: string;
+  reason: string;
+}
+
+export function validateTransfer(f: TransferInput, available: number | null): string | null {
+  const qty = Number(f.quantity);
+  if (!f.product || !f.fromWarehouse || !f.toWarehouse) return 'Select product and both warehouses';
+  if (f.fromWarehouse === f.toWarehouse) return 'Source and destination must differ';
+  if (!Number.isFinite(qty) || qty <= 0) return 'Enter a valid quantity';
+  if (available !== null && qty > available) return `Cannot transfer more than available (${available})`;
+  return null;
+}
+
+export async function transferStock(f: TransferInput): Promise<void> {
+  await API.post('/inventory/transfer', {
+    product: f.product,
+    fromWarehouse: f.fromWarehouse,
+    toWarehouse: f.toWarehouse,
+    quantity: Number(f.quantity),
+    reason: f.reason.trim(),
+  });
+}
+
+/* ================= AI Inventory Insight =================
+ * Web InventoryAIAssistant / aiService.getInventoryInsight:
+ *   POST /ai/inventory-insight { type, inventory: StockRow[] (non-empty) }
+ *     -> { success, type, label, insight, model, generatedAt }
+ */
+export const INVENTORY_AI_FEATURES = [
+  { type: 'insights', label: 'Inventory Insights', description: 'Overall stock health overview', icon: 'bar-chart-2' },
+  { type: 'lowstock', label: 'Low Stock Analysis', description: 'Stockout risks & urgent items', icon: 'alert-triangle' },
+  { type: 'overstock', label: 'Overstock Analysis', description: 'Excess stock & holding cost', icon: 'layers' },
+  { type: 'restock', label: 'Restock Recommendations', description: 'Reorder plan & priorities', icon: 'refresh-cw' },
+] as const;
+
+export type InventoryInsightType = (typeof INVENTORY_AI_FEATURES)[number]['type'];
+
+export async function getInventoryInsight(
+  type: InventoryInsightType,
+  inventory: StockRow[]
+): Promise<{ insight: string; model?: string }> {
+  const { data } = await API.post('/ai/inventory-insight', { type, inventory });
+  if (!data?.success) throw new Error(data?.message || 'Request failed');
+  return data;
 }

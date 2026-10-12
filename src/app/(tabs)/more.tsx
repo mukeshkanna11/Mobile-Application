@@ -126,6 +126,22 @@ const ERP_MODULES: ModuleEntry[] = [
     color: '#e11d48',
     onPress: () => router.push('/inventory'),
   },
+  {
+    label: 'Stock Adjustment',
+    description: 'Increase or decrease stock with a reason',
+    icon: 'sliders',
+    tint: 'bg-orange-50',
+    color: '#ea580c',
+    onPress: () => router.push('/stock-adjustment'),
+  },
+  {
+    label: 'Warehouse Transfer',
+    description: 'Move stock between warehouses',
+    icon: 'repeat',
+    tint: 'bg-teal-50',
+    color: '#0d9488',
+    onPress: () => router.push('/warehouse-transfer'),
+  },
 ];
 
 const SECTION_ICON: Record<string, FeatherName> = { ERP: 'layers', 'CRM Automations': 'zap' };

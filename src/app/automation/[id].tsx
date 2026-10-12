@@ -17,6 +17,7 @@ import {
   duplicateAutomation,
   fetchAutomation,
   fetchAutomationExecutions,
+  testAutomation,
   pauseAutomation,
   STATUS_META,
   type Automation,
@@ -87,6 +88,37 @@ export default function AutomationDetailsScreen() {
       ? act(() => pauseAutomation(id!), 'Automation paused')
       : act(() => activateAutomation(id!), 'Automation activated');
 
+  /** Backend /test fires this module+event for every ACTIVE automation — real actions run. */
+  const confirmTest = () => {
+    if (!automation) return;
+    const event = automation.trigger?.event ?? 'event';
+    Alert.alert(
+      'Run test',
+      `This fires the "${event}" event for ALL active ${automation.module} automations with an empty test record. ` +
+        'Their actions really run (emails, tasks, notifications).' +
+        (automation.status !== 'active' ? '\n\nThis automation is not active, so it will not be included.' : ''),
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Run test',
+          onPress: async () => {
+            try {
+              setBusy(true);
+              const r = await testAutomation(id!);
+              if (r.error) throw new Error(r.error);
+              Toast.show({ type: 'success', text1: 'Test completed', text2: `${r.matched} matched · ${r.executed} executed` });
+              await load(); // refresh run history
+            } catch (err) {
+              Toast.show({ type: 'error', text1: 'Test failed', text2: automationError(err) });
+            } finally {
+              setBusy(false);
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const confirmDelete = () =>
     Alert.alert('Delete automation', 'Delete this automation?', [
       { text: 'Cancel', style: 'cancel' },
@@ -111,6 +143,12 @@ export default function AutomationDetailsScreen() {
         right={
           automation ? (
             <>
+              <HeaderAction
+                icon="edit-2"
+                disabled={busy}
+                onPress={() => router.push({ pathname: '/automation/edit/[id]', params: { id: id! } })}
+              />
+              <HeaderAction icon="play" disabled={busy} onPress={confirmTest} />
               <HeaderAction
                 icon="copy"
                 disabled={busy}

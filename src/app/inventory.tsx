@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 
+import AIInsightPanel from '@/components/ui/AIInsightPanel';
 import EnterpriseHeader, { HeaderAction } from '@/components/ui/EnterpriseHeader';
 import InventoryCard from '@/components/ui/InventoryCard';
 import KpiCard from '@/components/ui/KpiCard';
@@ -32,6 +33,9 @@ import {
   warehouseOptions,
   type InventoryFilters,
   type StockRow,
+  getInventoryInsight,
+  INVENTORY_AI_FEATURES,
+  type InventoryInsightType,
 } from '@/services/inventory';
 
 const PAGE_SIZE = 10;
@@ -44,6 +48,7 @@ export default function InventoryScreen() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
 
   const [search, setSearch] = useState('');
   const [warehouse, setWarehouse] = useState<InventoryFilters['warehouse']>('All');
@@ -268,6 +273,27 @@ export default function InventoryScreen() {
           contentContainerStyle={{ paddingHorizontal: 20, paddingTop: 8, paddingBottom: 40, flexGrow: 1 }}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
+          ListHeaderComponent={
+            // Backend needs a non-empty inventory, so the assistant only appears with stock data.
+            rows.length === 0 ? null : aiOpen ? (
+              <View className="mb-3">
+                <AIInsightPanel
+                  subtitle={`${rows.length} stock rows across ${stats.warehouses} warehouses`}
+                  features={INVENTORY_AI_FEATURES}
+                  fetchInsight={(type) => getInventoryInsight(type as InventoryInsightType, rows)}
+                  onClose={() => setAiOpen(false)}
+                />
+              </View>
+            ) : (
+              <Pressable
+                onPress={() => setAiOpen(true)}
+                className="mb-3 flex-row items-center justify-center rounded-2xl bg-indigo-600 py-3 active:opacity-90"
+              >
+                <Feather name="cpu" size={16} color="#fff" />
+                <Text className="ml-2 font-semibold text-white">Ask ReadyTech AI about inventory</Text>
+              </Pressable>
+            )
+          }
           renderItem={({ item }) => (
             <InventoryCard
               row={item}

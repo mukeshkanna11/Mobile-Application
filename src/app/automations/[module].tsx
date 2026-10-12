@@ -116,14 +116,24 @@ export default function CrmAutomationListScreen() {
         badge="CRM Automation"
         subtitle={meta.description}
         right={
-          <HeaderAction
-            icon="refresh-cw"
-            onPress={() => {
-              setRefreshing(true);
-              load();
-            }}
-            color={refreshing ? '#a5b4fc' : '#ffffff'}
-          />
+          <>
+            <HeaderAction
+              icon="layers"
+              onPress={() => router.push({ pathname: '/automation/templates', params: { module: meta.module } })}
+            />
+            <HeaderAction
+              icon="plus"
+              onPress={() => router.push({ pathname: '/automation/new', params: { module: meta.module } })}
+            />
+            <HeaderAction
+              icon="refresh-cw"
+              onPress={() => {
+                setRefreshing(true);
+                load();
+              }}
+              color={refreshing ? '#a5b4fc' : '#ffffff'}
+            />
+          </>
         }
       >
         <View className="mt-4 flex-row gap-2">
@@ -235,7 +245,7 @@ export default function CrmAutomationListScreen() {
               message={
                 search || status !== 'all'
                   ? 'Try adjusting your search or status filter.'
-                  : `No ${meta.label.toLowerCase()} yet. Create them from the web Automation Builder.`
+                  : `No ${meta.label.toLowerCase()} yet. Tap + to build one or start from a template.`
               }
             />
           }
