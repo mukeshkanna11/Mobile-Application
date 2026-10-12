@@ -26,6 +26,7 @@ import {
   type Client,
   type ClientFilters,
 } from '@/services/clients';
+import { isForbidden } from '@/services/products';
 
 const PAGE_SIZE = 10;
 const STATUS_OPTIONS = ['All', 'Active', 'Inactive'] as const;
@@ -35,6 +36,8 @@ export default function ClientsScreen() {
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // Backend restricts this list to admins; a 403 gets its own message (retrying can't help).
+  const [forbidden, setForbidden] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const [search, setSearch] = useState('');
@@ -48,7 +51,8 @@ export default function ClientsScreen() {
       setError(false);
       const data = await fetchClients();
       setClients(data);
-    } catch {
+    } catch (err) {
+      setForbidden(isForbidden(err));
       setError(true);
     } finally {
       setLoading(false);
@@ -260,6 +264,12 @@ export default function ClientsScreen() {
 
       {loading ? (
         <LoadingState label="Loading clients…" />
+      ) : error && forbidden ? (
+        <MessageState
+          icon="lock"
+          title="Admin access required"
+          message="Client records can only be viewed by admin users. Ask an administrator for access."
+        />
       ) : error ? (
         <MessageState
           icon="wifi-off"

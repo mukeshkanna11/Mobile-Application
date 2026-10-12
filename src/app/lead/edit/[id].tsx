@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
@@ -12,6 +12,7 @@ import {
   updateLead,
   type LeadInput,
 } from '@/services/leads';
+import { goBackOr } from '@/utils/nav';
 
 export default function EditLeadScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -33,13 +34,18 @@ export default function EditLeadScreen() {
     }
   }, [id]);
 
+  // Initial fetch without synchronous setState in the effect; Retry still uses load().
   useEffect(() => {
-    load();
-  }, [load]);
+    if (!id) return;
+    fetchLead(id)
+      .then((r) => setInitial(toLeadInput(r)))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, [id]);
 
   const handleUpdate = async (input: LeadInput) => {
     Toast.show({ type: 'success', text1: await updateLead(id!, input) });
-    router.back();
+    goBackOr('/leads');
   };
 
   return (

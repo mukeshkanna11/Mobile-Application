@@ -1,16 +1,16 @@
-import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 
 import OpportunityForm from '@/components/forms/OpportunityForm';
 import EnterpriseHeader from '@/components/ui/EnterpriseHeader';
 import { createOpportunity, type OpportunityInput } from '@/services/opportunities';
+import { goBackOr } from '@/utils/nav';
 
 export default function NewOpportunityScreen() {
   const handleCreate = async (input: OpportunityInput) => {
     await createOpportunity(input);
     Toast.show({ type: 'success', text1: 'Opportunity created successfully' });
-    router.back();
+    goBackOr('/opportunities');
   };
 
   return (

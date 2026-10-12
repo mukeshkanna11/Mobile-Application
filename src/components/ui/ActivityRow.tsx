@@ -1,5 +1,5 @@
 import { Feather } from '@expo/vector-icons';
-import { Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, Text, View } from 'react-native';
 
 import type { Activity } from '@/services/dashboard';
 
@@ -25,8 +25,23 @@ function formatDate(iso?: string): string {
  * Three-column layout: fixed avatar, flexible title/subtitle that truncates,
  * and a right-aligned timestamp column. Horizontal padding matches the card
  * header (px-5) so the whole feed shares one gutter.
+ *
+ * Pass `onToggleDone` to show a Complete / Completed toggle in the right
+ * column; without it the row stays read-only (plain "Done" label).
  */
-export default function ActivityRow({ activity }: { activity: Activity }) {
+export default function ActivityRow({
+  activity,
+  onToggleDone,
+  saving = false,
+  disabled = false,
+}: {
+  activity: Activity;
+  onToggleDone?: () => void;
+  /** This row's update is in flight — shows a spinner. */
+  saving?: boolean;
+  /** Any update is in flight — blocks taps (prevents duplicate submissions). */
+  disabled?: boolean;
+}) {
   const icon = ICON_BY_TYPE[activity.type ?? ''] ?? 'activity';
   const date = formatDate(activity.createdAt);
   const assignee = activity.assignedTo?.name ?? 'Unassigned';
@@ -65,7 +80,38 @@ export default function ActivityRow({ activity }: { activity: Activity }) {
         {date ? (
           <Text className="text-[11px] font-medium text-slate-400">{date}</Text>
         ) : null}
-        {activity.done ? (
+        {onToggleDone ? (
+          <Pressable
+            onPress={onToggleDone}
+            disabled={disabled || saving}
+            hitSlop={6}
+            accessibilityRole="button"
+            accessibilityState={{ checked: Boolean(activity.done), busy: saving }}
+            accessibilityLabel={activity.done ? 'Completed. Tap to reopen' : 'Mark as complete'}
+            className={`mt-1.5 min-w-[92px] flex-row items-center justify-center rounded-full border px-2.5 py-1 active:opacity-80 ${
+              activity.done ? 'border-green-200 bg-green-50' : 'border-indigo-200 bg-indigo-50'
+            } ${disabled && !saving ? 'opacity-50' : ''}`}
+          >
+            {saving ? (
+              <ActivityIndicator size="small" color={activity.done ? '#16a34a' : '#4f46e5'} />
+            ) : (
+              <>
+                <Feather
+                  name={activity.done ? 'check-circle' : 'circle'}
+                  size={12}
+                  color={activity.done ? '#16a34a' : '#4f46e5'}
+                />
+                <Text
+                  className={`ml-1 text-[11px] font-semibold ${
+                    activity.done ? 'text-green-700' : 'text-indigo-600'
+                  }`}
+                >
+                  {activity.done ? 'Completed' : 'Complete'}
+                </Text>
+              </>
+            )}
+          </Pressable>
+        ) : activity.done ? (
           <View className="mt-1 flex-row items-center">
             <Feather name="check-circle" size={12} color="#16a34a" />
             <Text className="ml-1 text-[10px] font-semibold text-green-600">

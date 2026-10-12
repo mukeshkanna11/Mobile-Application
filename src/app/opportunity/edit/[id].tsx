@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
@@ -12,6 +12,7 @@ import {
   updateOpportunity,
   type OpportunityInput,
 } from '@/services/opportunities';
+import { goBackOr } from '@/utils/nav';
 
 export default function EditOpportunityScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -33,14 +34,19 @@ export default function EditOpportunityScreen() {
     }
   }, [id]);
 
+  // Initial fetch without synchronous setState in the effect; Retry still uses load().
   useEffect(() => {
-    load();
-  }, [load]);
+    if (!id) return;
+    fetchOpportunity(id)
+      .then((r) => setInitial(toOpportunityInput(r)))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, [id]);
 
   const handleUpdate = async (input: OpportunityInput) => {
     await updateOpportunity(id!, input);
     Toast.show({ type: 'success', text1: 'Opportunity updated successfully' });
-    router.back();
+    goBackOr('/opportunities');
   };
 
   return (

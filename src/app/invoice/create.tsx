@@ -1,5 +1,4 @@
 import { Feather } from '@expo/vector-icons';
-import { router } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import {
   KeyboardAvoidingView,
@@ -20,6 +19,7 @@ import PrimaryButton from '@/components/ui/PrimaryButton';
 import SearchablePicker, { type PickerOption } from '@/components/ui/SearchablePicker';
 import Segmented from '@/components/ui/Segmented';
 import { fetchClients, type Client } from '@/services/clients';
+import { isForbidden } from '@/services/products';
 import { createInvoice, money } from '@/services/invoices';
 import {
   billingFromClient,
@@ -39,6 +39,7 @@ import {
   type InvoiceFormItem,
   type InvoiceFormState,
 } from '@/services/invoiceForm';
+import { goBackOr } from '@/utils/nav';
 
 /** Segmented renders raw option strings, so map labels ⇄ mode values here. */
 const MODE_LABELS = ['Existing Client', 'New / Walk-in'] as const;
@@ -85,11 +86,17 @@ export default function CreateInvoiceScreen() {
   const [clients, setClients] = useState<Client[]>([]);
   const [invoice, setInvoice] = useState<InvoiceFormState>(createInvoiceState());
   const [saving, setSaving] = useState(false);
+  // /clients is admin-only; non-admins can still bill walk-in customers.
+  const [clientsForbidden, setClientsForbidden] = useState(false);
 
   useEffect(() => {
     fetchClients()
       .then(setClients)
-      .catch(() => Toast.show({ type: 'error', text1: 'Unable to load customers' }));
+      .catch((err) =>
+        isForbidden(err)
+          ? setClientsForbidden(true)
+          : Toast.show({ type: 'error', text1: 'Unable to load customers' })
+      );
   }, []);
 
   const setField = <K extends keyof InvoiceFormState>(
@@ -195,7 +202,7 @@ export default function CreateInvoiceScreen() {
       setSaving(true);
       await createInvoice(buildInvoicePayload(invoice, client));
       Toast.show({ type: 'success', text1: 'Invoice Created Successfully' });
-      router.back();
+      goBackOr('/invoices');
     } catch (error: any) {
       Toast.show({
         type: 'error',
@@ -232,7 +239,15 @@ export default function CreateInvoiceScreen() {
             onChange={(label) => changeMode(labelToMode(label))}
           />
 
-          {invoice.clientMode === 'existing' ? (
+          {invoice.clientMode === 'existing' && clientsForbidden ? (
+            <View className="mb-4 flex-row items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+              <Feather name="lock" size={14} color="#b45309" />
+              <Text className="flex-1 text-xs leading-5 text-amber-800">
+                Existing customers can only be loaded by admin users. Switch to
+                Walk-in to bill this customer, or ask an administrator for access.
+              </Text>
+            </View>
+          ) : invoice.clientMode === 'existing' ? (
             <SearchablePicker
               label="Customer"
               required

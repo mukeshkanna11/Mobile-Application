@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
@@ -12,6 +12,7 @@ import {
   updateUser,
   type UserInput,
 } from '@/services/users';
+import { goBackOr } from '@/utils/nav';
 
 export default function EditUserScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -37,14 +38,19 @@ export default function EditUserScreen() {
     }
   }, [id]);
 
+  // Initial fetch without synchronous setState in the effect; Retry still uses load().
   useEffect(() => {
-    load();
-  }, [load]);
+    if (!id) return;
+    fetchUser(id)
+      .then((r) => (r ? setInitial(toUserInput(r)) : setError(true)))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, [id]);
 
   const handleUpdate = async (values: UserInput) => {
     await updateUser(id!, values);
     Toast.show({ type: 'success', text1: 'User updated successfully' });
-    router.back();
+    goBackOr('/users');
   };
 
   return (

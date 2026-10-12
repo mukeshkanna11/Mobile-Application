@@ -29,6 +29,7 @@ import {
   type User,
   type UserFilters,
 } from '@/services/users';
+import { isForbidden } from '@/services/products';
 
 const PAGE_SIZE = 8;
 
@@ -39,6 +40,8 @@ export default function UsersScreen() {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
+  // Backend restricts this list to admins; a 403 gets its own message (retrying can't help).
+  const [forbidden, setForbidden] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   const [search, setSearch] = useState('');
@@ -52,7 +55,8 @@ export default function UsersScreen() {
       setError(false);
       const data = await fetchUsers();
       setUsers(data);
-    } catch {
+    } catch (err) {
+      setForbidden(isForbidden(err));
       setError(true);
       setUsers([]);
     } finally {
@@ -271,6 +275,12 @@ export default function UsersScreen() {
 
       {loading ? (
         <LoadingState label="Loading users…" />
+      ) : error && forbidden ? (
+        <MessageState
+          icon="lock"
+          title="Admin access required"
+          message="User management can only be viewed by admin users. Ask an administrator for access."
+        />
       ) : error ? (
         <MessageState
           icon="wifi-off"

@@ -186,3 +186,20 @@ export function warehouseStats(rows: Warehouse[]) {
   const primary = rows.filter((w) => w.isPrimary).length;
   return { total, active, inactive, totalCapacity, totalCurrentStock, primary };
 }
+
+/** Active warehouses as SearchablePicker options (PO receive / SO approve & deliver). */
+export function warehousePickerOptions(rows: Warehouse[]) {
+  return rows
+    .filter((w) => (w.status || 'Active') === 'Active')
+    .map((w) => ({
+      label: w.name,
+      sublabel: [w.code, w.location || w.city].filter(Boolean).join(' · ') || undefined,
+      value: w._id,
+    }));
+}
+
+/** Default pick: the primary active warehouse, else the first active one. */
+export function defaultWarehouseId(rows: Warehouse[]): string {
+  const active = rows.filter((w) => (w.status || 'Active') === 'Active');
+  return (active.find((w) => w.isPrimary) ?? active[0])?._id ?? '';
+}

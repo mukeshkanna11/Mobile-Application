@@ -1,4 +1,4 @@
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
@@ -12,6 +12,7 @@ import {
   updateProduct,
   type ProductInput,
 } from '@/services/products';
+import { goBackOr } from '@/utils/nav';
 
 export default function EditProductScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -33,14 +34,19 @@ export default function EditProductScreen() {
     }
   }, [id]);
 
+  // Initial fetch without synchronous setState in the effect; Retry still uses load().
   useEffect(() => {
-    load();
-  }, [load]);
+    if (!id) return;
+    fetchProduct(id)
+      .then((r) => setInitial(toProductInput(r)))
+      .catch(() => setError(true))
+      .finally(() => setLoading(false));
+  }, [id]);
 
   const handleUpdate = async (input: ProductInput) => {
     await updateProduct(id!, input);
     Toast.show({ type: 'success', text1: 'Product updated' });
-    router.back();
+    goBackOr('/products');
   };
 
   return (

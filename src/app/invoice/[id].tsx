@@ -1,5 +1,5 @@
 import { Feather } from '@expo/vector-icons';
-import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -18,6 +18,7 @@ import {
   type Invoice,
 } from '@/services/invoices';
 import { downloadAndShareInvoicePdf } from '@/services/pdf';
+import { goBackOr } from '@/utils/nav';
 
 type FeatherName = keyof typeof Feather.glyphMap;
 
@@ -187,7 +188,7 @@ export default function InvoiceDetailsScreen() {
             try {
               await deleteInvoice(invoice._id);
               Toast.show({ type: 'success', text1: 'Invoice deleted' });
-              router.back();
+              goBackOr('/invoices');
             } catch {
               Toast.show({ type: 'error', text1: 'Delete failed' });
             }

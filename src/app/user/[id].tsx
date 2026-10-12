@@ -15,6 +15,7 @@ import {
   roleStyle,
   type User,
 } from '@/services/users';
+import { goBackOr } from '@/utils/nav';
 
 export default function UserDetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -64,7 +65,7 @@ export default function UserDetailsScreen() {
             setDeleting(true);
             await deleteUser(id);
             Toast.show({ type: 'success', text1: 'User removed' });
-            router.back();
+            goBackOr('/users');
           } catch (err: any) {
             setDeleting(false);
             Toast.show({

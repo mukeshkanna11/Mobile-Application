@@ -45,6 +45,7 @@ import {
   type ActiveCall,
   type CallState,
 } from '@/services/voice';
+import { goBackOr } from '@/utils/nav';
 
 type FeatherName = keyof typeof Feather.glyphMap;
 
@@ -269,7 +270,7 @@ export default function LeadDetailsScreen() {
             setDeleting(true);
             await deleteLead(id);
             Toast.show({ type: 'success', text1: 'Lead deleted successfully' });
-            router.back();
+            goBackOr('/leads');
           } catch (err: any) {
             setDeleting(false);
             Toast.show({
@@ -282,6 +283,12 @@ export default function LeadDetailsScreen() {
       },
     ]);
   }, [id]);
+
+  // Converted opportunity may be populated ({ _id, title }) or a bare id.
+  const convertedOppId =
+    typeof lead?.convertedOpportunity === 'object'
+      ? lead?.convertedOpportunity?._id
+      : lead?.convertedOpportunity || undefined;
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
@@ -632,6 +639,7 @@ export default function LeadDetailsScreen() {
             <DetailRow
               icon="briefcase"
               label="Opportunity"
+              onPress={convertedOppId ? () => router.push({ pathname: '/opportunity/[id]', params: { id: convertedOppId } }) : undefined}
               value={
                 typeof lead.convertedOpportunity === 'object' && lead.convertedOpportunity?.title
                   ? lead.convertedOpportunity.title

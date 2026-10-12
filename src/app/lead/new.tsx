@@ -1,15 +1,15 @@
-import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 
 import LeadForm from '@/components/forms/LeadForm';
 import EnterpriseHeader from '@/components/ui/EnterpriseHeader';
 import { createLead, type LeadInput } from '@/services/leads';
+import { goBackOr } from '@/utils/nav';
 
 export default function NewLeadScreen() {
   const handleCreate = async (input: LeadInput) => {
     Toast.show({ type: 'success', text1: await createLead(input) });
-    router.back();
+    goBackOr('/leads');
   };
 
   return (

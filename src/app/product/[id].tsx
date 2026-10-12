@@ -16,6 +16,7 @@ import {
   type Product,
   getProductBarcode,
 } from '@/services/products';
+import { goBackOr } from '@/utils/nav';
 
 function StatChip({ label, value, tone }: { label: string; value: string; tone?: string }) {
   return (
@@ -72,7 +73,7 @@ export default function ProductDetailsScreen() {
               setDeleting(true);
               await deleteProduct(id);
               Toast.show({ type: 'success', text1: 'Product deleted' });
-              router.back();
+              goBackOr('/products');
             } catch (err: any) {
               setDeleting(false);
               Toast.show({

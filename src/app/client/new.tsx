@@ -1,16 +1,16 @@
-import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 
 import ClientForm from '@/components/forms/ClientForm';
 import EnterpriseHeader from '@/components/ui/EnterpriseHeader';
 import { createClient, type ClientInput } from '@/services/clients';
+import { goBackOr } from '@/utils/nav';
 
 export default function NewClientScreen() {
   const handleCreate = async (input: ClientInput) => {
     await createClient(input);
     Toast.show({ type: 'success', text1: 'Client created' });
-    router.back();
+    goBackOr('/clients');
   };
 
   return (

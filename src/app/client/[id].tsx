@@ -24,6 +24,7 @@ import {
   type Client,
   type ClientInsightType,
 } from '@/services/clients';
+import { goBackOr } from '@/utils/nav';
 
 type FeatherName = keyof typeof Feather.glyphMap;
 
@@ -135,7 +136,7 @@ export default function ClientDetailsScreen() {
               setDeleting(true);
               await deleteClient(id);
               Toast.show({ type: 'success', text1: 'Client removed' });
-              router.back();
+              goBackOr('/clients');
             } catch (err: any) {
               setDeleting(false);
               Toast.show({

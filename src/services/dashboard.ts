@@ -1,8 +1,10 @@
 import API from '@/services/api';
+import { isForbidden } from '@/services/products';
 
 /**
  * Executive dashboard data. Mirrors the web DashboardPage exactly:
- *   Core ERP (failure -> error state):  /products, /sales, /purchase, /inventory/summary
+ *   Core ERP (failure -> error state):  /sales, /purchase, /inventory/summary
+ *   /products is admin-only: a 403 degrades to [] with `productsRestricted` set
  *   CRM (degrade to [] if unavailable): /leads, /clients, /opportunities, /activities
  * All metrics are derived client-side with the same rules as the web page.
  */
@@ -105,6 +107,8 @@ export interface DashboardData {
   leadStatusData: { name: string; value: number }[];
   // ERP / Inventory
   products: number;
+  /** /products returned 403 (non-admin) — product metrics are unavailable. */
+  productsRestricted: boolean;
   warehouses: number;
   inventoryItems: number;
   stockChart: { name: string; qty: number; limit: number }[];
@@ -139,8 +143,13 @@ const byDateDesc = (a: { createdAt?: string }, b: { createdAt?: string }) =>
   new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime();
 
 export async function fetchDashboard(): Promise<DashboardData> {
+  let productsRestricted = false;
   const [products, sales, purchases, inventory] = await Promise.all([
-    get<Named>('/products'),
+    get<Named>('/products').catch((err) => {
+      if (!isForbidden(err)) throw err;
+      productsRestricted = true;
+      return [] as Named[];
+    }),
     get<SalesOrder>('/sales'),
     get<PurchaseOrder>('/purchase'),
     get<InventoryRow>('/inventory/summary'),
@@ -281,6 +290,7 @@ export async function fetchDashboard(): Promise<DashboardData> {
       value: leads.filter((l) => l.status === st).length,
     })).filter((d) => d.value > 0),
     products: products.length,
+    productsRestricted,
     warehouses,
     inventoryItems: stockChart.length,
     stockChart,

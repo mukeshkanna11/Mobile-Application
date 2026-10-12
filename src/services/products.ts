@@ -84,6 +84,10 @@ function toPayload(input: ProductInput) {
   };
 }
 
+/** True when the backend rejected the request for role reasons (`/products` is admin-only). */
+export const isForbidden = (err: unknown) =>
+  (err as { response?: { status?: number } })?.response?.status === 403;
+
 export async function fetchProducts(): Promise<Product[]> {
   const res = await API.get('/products');
   // Web maps a default status of "Active" onto every product.

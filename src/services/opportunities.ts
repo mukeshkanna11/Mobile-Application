@@ -206,3 +206,106 @@ export function leadName(lead: any): string {
   if (typeof lead === 'string') return 'Lead';
   return lead.name || 'Lead';
 }
+
+/* ===================== Follow-ups =====================
+ * Mirrors the web OpportunitiesTab follow-up panel, using the existing routes:
+ *   GET    /opportunities/:id/followups              -> { success, data: FollowUp[] }
+ *   POST   /opportunities/:id/followups              { type, date, note }  (date required)
+ *   PUT    /opportunities/:id/followups/:followUpId  { status?, type?, date?, note? }
+ *   DELETE /opportunities/:id/followups/:followUpId
+ * The backend stamps completedAt when status becomes "Completed" and clears it otherwise.
+ */
+
+export const FOLLOW_UP_TYPES = ['Call', 'Meeting', 'Email', 'WhatsApp', 'Other'] as const;
+export type FollowUpType = (typeof FOLLOW_UP_TYPES)[number];
+export type FollowUpStatus = 'Pending' | 'Completed' | 'Cancelled';
+
+export interface FollowUp {
+  _id: string;
+  type: FollowUpType;
+  date: string;
+  note?: string;
+  status: FollowUpStatus;
+  completedAt?: string;
+  createdBy?: { _id?: string; name?: string } | string;
+  createdAt?: string;
+}
+
+/** Form state — date as YYYY-MM-DD (DateField) plus optional HH:MM, like the web datetime-local input. */
+export interface FollowUpInput {
+  type: FollowUpType;
+  date: string;
+  time: string;
+  note: string;
+}
+
+export const emptyFollowUp = (): FollowUpInput => ({ type: 'Call', date: '', time: '10:00', note: '' });
+
+const TIME_RE = /^([01]?\d|2[0-3]):([0-5]\d)$/;
+
+export function validateFollowUp(input: FollowUpInput): string | null {
+  if (!input.date) return 'Follow-up date is required';
+  if (input.time.trim() && !TIME_RE.test(input.time.trim())) return 'Enter time as HH:MM (24-hour)';
+  if (input.note.length > 2000) return 'Note must be 2000 characters or fewer';
+  return null;
+}
+
+/** Local date + time -> ISO string (web sends new Date(datetime-local)). */
+function toIsoDate(input: FollowUpInput): string {
+  const [y, m, d] = input.date.split('-').map(Number);
+  const [hh, mm] = (input.time.trim() || '00:00').split(':').map(Number);
+  return new Date(y, m - 1, d, hh, mm).toISOString();
+}
+
+const pad = (n: number) => String(n).padStart(2, '0');
+
+export function toFollowUpInput(f: FollowUp): FollowUpInput {
+  const dt = new Date(f.date);
+  return {
+    type: f.type ?? 'Call',
+    date: `${dt.getFullYear()}-${pad(dt.getMonth() + 1)}-${pad(dt.getDate())}`,
+    time: `${pad(dt.getHours())}:${pad(dt.getMinutes())}`,
+    note: f.note ?? '',
+  };
+}
+
+const followUpPayload = (input: FollowUpInput) => ({
+  type: input.type,
+  date: toIsoDate(input),
+  note: input.note.trim(),
+});
+
+export async function fetchFollowUps(opportunityId: string): Promise<FollowUp[]> {
+  const { data } = await API.get(`/opportunities/${opportunityId}/followups`);
+  return Array.isArray(data?.data) ? (data.data as FollowUp[]) : [];
+}
+
+export async function addFollowUp(opportunityId: string, input: FollowUpInput): Promise<void> {
+  await API.post(`/opportunities/${opportunityId}/followups`, followUpPayload(input));
+}
+
+export async function updateFollowUp(
+  opportunityId: string,
+  followUpId: string,
+  patch: FollowUpInput | { status: FollowUpStatus }
+): Promise<void> {
+  const body = 'status' in patch ? patch : followUpPayload(patch);
+  await API.put(`/opportunities/${opportunityId}/followups/${followUpId}`, body);
+}
+
+export async function deleteFollowUp(opportunityId: string, followUpId: string): Promise<void> {
+  await API.delete(`/opportunities/${opportunityId}/followups/${followUpId}`);
+}
+
+/** Pending first (soonest due), then completed/cancelled (most recent first). */
+export function sortFollowUps(rows: FollowUp[]): FollowUp[] {
+  const t = (f: FollowUp) => new Date(f.date).getTime() || 0;
+  return [...rows].sort((a, b) => {
+    const ap = a.status === 'Pending', bp = b.status === 'Pending';
+    if (ap !== bp) return ap ? -1 : 1;
+    return ap ? t(a) - t(b) : t(b) - t(a);
+  });
+}
+
+export const isOverdue = (f: FollowUp) =>
+  f.status === 'Pending' && new Date(f.date).getTime() < Date.now();

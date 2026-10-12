@@ -10,14 +10,16 @@ import {
 /**
  * Salesforce module data access — mirrors the web SalesforceDashboard.jsx.
  *
- * This is an aggregation layer only: it owns NO CRUD. Leads and Opportunities
- * come from the existing mobile services untouched, and activities are read
- * from the existing `GET /activities` endpoint. Every derived metric below uses
- * the same formula as the web dashboard.
+ * Mostly an aggregation layer: Leads and Opportunities come from the existing
+ * mobile services untouched, and activities are read from the existing
+ * `GET /activities` endpoint. The only write is the web ActivitiesTab's
+ * complete toggle. Every derived metric below uses the same formula as the
+ * web dashboard.
  *
  *   GET /leads?limit=1000            (via services/leads)
  *   GET /opportunities?limit=1000    (via services/opportunities)
- *   GET /activities?limit=n          (read-only, paginated envelope)
+ *   GET /activities?limit=n          (paginated envelope)
+ *   PUT /activities/:id { done }     (backend sets/clears completedAt)
  */
 
 /**
@@ -44,13 +46,19 @@ export interface SalesforceSnapshot {
   allFailed: boolean;
 }
 
-/**
- * Read-only activities fetch. Deliberately not a CRUD service: the Salesforce
- * module only reads the feed, it never creates or edits activities.
- */
+/** Activities feed (newest first, paginated envelope `{ data }`). */
 export async function fetchActivities(limit = 50): Promise<Activity[]> {
   const { data } = await API.get('/activities', { params: { limit } });
   return Array.isArray(data?.data) ? (data.data as Activity[]) : [];
+}
+
+/**
+ * Mark an activity complete (`done: true`, as the web ActivitiesTab does) or
+ * reopen it (`done: false`). Same `PUT /activities/:id` endpoint; the backend
+ * stamps `completedAt` on completion and clears it on reopen.
+ */
+export async function setActivityDone(id: string, done: boolean): Promise<void> {
+  await API.put(`/activities/${id}`, { done });
 }
 
 /**

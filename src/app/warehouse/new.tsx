@@ -1,16 +1,16 @@
-import { router } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 
 import WarehouseForm from '@/components/forms/WarehouseForm';
 import EnterpriseHeader from '@/components/ui/EnterpriseHeader';
 import { createWarehouse, type WarehouseInput } from '@/services/warehouses';
+import { goBackOr } from '@/utils/nav';
 
 export default function NewWarehouseScreen() {
   const handleCreate = async (input: WarehouseInput) => {
     await createWarehouse(input);
     Toast.show({ type: 'success', text1: 'Warehouse created successfully' });
-    router.back();
+    goBackOr('/warehouses');
   };
 
   return (

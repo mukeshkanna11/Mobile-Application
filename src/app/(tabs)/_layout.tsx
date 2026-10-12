@@ -4,10 +4,13 @@ import type { ColorValue } from 'react-native';
 
 type FeatherName = keyof typeof Feather.glyphMap;
 
-const tabIcon =
-  (name: FeatherName) =>
-  ({ color, size }: { color: ColorValue; size: number }) =>
-    <Feather name={name} size={size} color={color} />;
+const tabIcon = (name: FeatherName) => {
+  const TabIcon = ({ color, size }: { color: ColorValue; size: number }) => (
+    <Feather name={name} size={size} color={color} />
+  );
+  TabIcon.displayName = `TabIcon(${name})`;
+  return TabIcon;
+};
 
 export default function TabsLayout() {
   return (
@@ -41,13 +44,15 @@ export default function TabsLayout() {
         name="products"
         options={{ title: 'Products', tabBarIcon: tabIcon('package') }}
       />
+      {/* Hidden from the tab bar (href: null) but still routable as /users; opened from More. */}
       <Tabs.Screen
         name="users"
-        options={{ title: 'Users', tabBarIcon: tabIcon('user-check') }}
+        options={{ title: 'Users', tabBarIcon: tabIcon('user-check'), href: null }}
       />
+      {/* Hidden from the tab bar (href: null) but still routable as /invoices; opened from More. */}
       <Tabs.Screen
         name="invoices"
-        options={{ title: 'Invoices', tabBarIcon: tabIcon('file-text') }}
+        options={{ title: 'Invoices', tabBarIcon: tabIcon('file-text'), href: null }}
       />
       <Tabs.Screen
         name="more"

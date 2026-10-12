@@ -12,6 +12,7 @@ import {
   fetchWarehouse,
   type Warehouse,
 } from '@/services/warehouses';
+import { goBackOr } from '@/utils/nav';
 
 const joinAddr = (parts: (string | undefined)[]) => parts.filter(Boolean).join(', ');
 
@@ -64,7 +65,7 @@ export default function WarehouseDetailsScreen() {
             setDeleting(true);
             await deleteWarehouse(id);
             Toast.show({ type: 'success', text1: 'Warehouse deleted' });
-            router.back();
+            goBackOr('/warehouses');
           } catch (err: any) {
             setDeleting(false);
             Toast.show({

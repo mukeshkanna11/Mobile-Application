@@ -74,10 +74,10 @@ function kpiGroups(d: DashboardData): { title: string; items: KpiItem[] }[] {
     {
       title: 'Sales',
       items: [
-        { label: 'Total Orders', value: num(d.salesOrders), icon: 'shopping-cart', tone: 'indigo' },
-        { label: 'Delivered', value: num(d.delivered), icon: 'package', tone: 'emerald' },
-        { label: 'Approved', value: num(d.approved), icon: 'calendar', tone: 'sky' },
-        { label: 'Sales Revenue', value: inr(d.totalRevenue), icon: 'credit-card', tone: 'violet' },
+        { label: 'Total Orders', value: num(d.salesOrders), icon: 'shopping-cart', tone: 'indigo', to: '/sales-orders' },
+        { label: 'Delivered', value: num(d.delivered), icon: 'package', tone: 'emerald', to: '/sales-orders' },
+        { label: 'Approved', value: num(d.approved), icon: 'calendar', tone: 'sky', to: '/sales-orders' },
+        { label: 'Sales Revenue', value: inr(d.totalRevenue), icon: 'credit-card', tone: 'violet', to: '/sales-orders' },
       ],
     },
     {
@@ -92,10 +92,10 @@ function kpiGroups(d: DashboardData): { title: string; items: KpiItem[] }[] {
     {
       title: 'ERP',
       items: [
-        { label: 'Products', value: num(d.products), icon: 'package', tone: 'indigo', to: '/products' },
+        { label: 'Products', value: d.productsRestricted ? 'Admin only' : num(d.products), icon: 'package', tone: 'indigo', ...(d.productsRestricted ? {} : { to: '/products' }) },
         { label: 'Warehouses', value: num(d.warehouses), icon: 'home', tone: 'sky', to: '/warehouses' },
         { label: 'Inventory Items', value: num(d.inventoryItems), icon: 'layers', tone: 'violet', to: '/inventory' },
-        { label: 'Purchase Orders', value: num(d.purchaseOrders), icon: 'shopping-cart', tone: 'amber' },
+        { label: 'Purchase Orders', value: num(d.purchaseOrders), icon: 'shopping-cart', tone: 'amber', to: '/purchase-orders' },
       ],
     },
     {
@@ -110,10 +110,10 @@ function kpiGroups(d: DashboardData): { title: string; items: KpiItem[] }[] {
     {
       title: 'Purchase',
       items: [
-        { label: 'Total POs', value: num(d.purchaseOrders), icon: 'shopping-cart', tone: 'violet' },
-        { label: 'Pending', value: num(d.pendingPO), icon: 'clock', tone: 'amber' },
-        { label: 'Completed', value: num(d.completedPO), icon: 'check-circle', tone: 'emerald' },
-        { label: 'Total Spend', value: inr(d.purchaseSpend), icon: 'dollar-sign', tone: 'indigo' },
+        { label: 'Total POs', value: num(d.purchaseOrders), icon: 'shopping-cart', tone: 'violet', to: '/purchase-orders' },
+        { label: 'Pending', value: num(d.pendingPO), icon: 'clock', tone: 'amber', to: '/purchase-orders' },
+        { label: 'Completed', value: num(d.completedPO), icon: 'check-circle', tone: 'emerald', to: '/purchase-orders' },
+        { label: 'Total Spend', value: inr(d.purchaseSpend), icon: 'dollar-sign', tone: 'indigo', to: '/purchase-orders' },
       ],
     },
   ];

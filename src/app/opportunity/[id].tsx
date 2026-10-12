@@ -1,10 +1,11 @@
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useState } from 'react';
-import { Alert, Text, ScrollView, View } from 'react-native';
+import { Alert, KeyboardAvoidingView, Platform, Text, ScrollView, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 
 import { DetailRow, Section } from '@/components/ui/DetailSection';
+import OpportunityFollowUps from '@/components/ui/OpportunityFollowUps';
 import EnterpriseHeader, { HeaderAction } from '@/components/ui/EnterpriseHeader';
 import StageBadge from '@/components/ui/StageBadge';
 import { LoadingState, MessageState } from '@/components/ui/StateView';
@@ -15,6 +16,7 @@ import {
   leadName,
   type Opportunity,
 } from '@/services/opportunities';
+import { goBackOr } from '@/utils/nav';
 
 const fmtDate = (d?: string) => (d ? new Date(d).toLocaleDateString() : undefined);
 
@@ -67,7 +69,7 @@ export default function OpportunityDetailsScreen() {
             setDeleting(true);
             await deleteOpportunity(id);
             Toast.show({ type: 'success', text1: 'Opportunity deleted' });
-            router.back();
+            goBackOr('/opportunities');
           } catch {
             setDeleting(false);
             Toast.show({ type: 'error', text1: 'Delete failed' });
@@ -129,8 +131,10 @@ export default function OpportunityDetailsScreen() {
           onAction={load}
         />
       ) : (
+        <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView
           contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
+          keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
           <View className="flex-row gap-3">
@@ -164,7 +168,10 @@ export default function OpportunityDetailsScreen() {
               {op.notes || 'No notes added for this opportunity yet.'}
             </Text>
           </Section>
+
+          <OpportunityFollowUps opportunityId={op._id} />
         </ScrollView>
+        </KeyboardAvoidingView>
       )}
     </SafeAreaView>
   );

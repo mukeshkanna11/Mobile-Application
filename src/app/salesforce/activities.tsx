@@ -1,7 +1,8 @@
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
+  Alert,
   FlatList,
   Pressable,
   RefreshControl,
@@ -10,6 +11,7 @@ import {
   View,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import Toast from 'react-native-toast-message';
 
 import ActivityRow from '@/components/ui/ActivityRow';
 import EnterpriseHeader, { HeaderAction } from '@/components/ui/EnterpriseHeader';
@@ -17,15 +19,15 @@ import KpiCard from '@/components/ui/KpiCard';
 import Segmented from '@/components/ui/Segmented';
 import { LoadingState, MessageState } from '@/components/ui/StateView';
 import type { Activity } from '@/services/dashboard';
-import { fetchActivities } from '@/services/salesforce';
+import { fetchActivities, setActivityDone } from '@/services/salesforce';
 
 const STATUS_FILTERS = ['All', 'Pending', 'Completed'] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
 /**
- * Salesforce → Activities. Read-only feed over the existing `GET /activities`
- * endpoint, reusing the shared ActivityRow from the Dashboard module. No
- * create/edit/delete here — activity CRUD is not part of this module.
+ * Salesforce → Activities. Feed over the existing `GET /activities` endpoint,
+ * reusing the shared ActivityRow. Like the web ActivitiesTab, the only write is
+ * the complete toggle (`PUT /activities/:id { done }`); no create/edit/delete.
  */
 export default function SalesforceActivitiesScreen() {
   const [activities, setActivities] = useState<Activity[]>([]);
@@ -36,6 +38,10 @@ export default function SalesforceActivitiesScreen() {
   const [search, setSearch] = useState('');
   const [status, setStatus] = useState<StatusFilter>('All');
   const [showFilters, setShowFilters] = useState(false);
+  // Id of the activity being saved. The ref blocks a second tap before the
+  // state update re-renders; the state drives the spinner / disabled rows.
+  const [savingId, setSavingId] = useState<string | null>(null);
+  const savingRef = useRef(false);
 
   const load = useCallback(async () => {
     try {
@@ -60,6 +66,45 @@ export default function SalesforceActivitiesScreen() {
     setRefreshing(true);
     load();
   }, [load]);
+
+  const saveDone = useCallback(
+    async (activity: Activity, done: boolean) => {
+      if (savingRef.current) return;
+      savingRef.current = true;
+      setSavingId(activity._id);
+      try {
+        await setActivityDone(activity._id, done);
+        Toast.show({ type: 'success', text1: done ? 'Marked as completed' : 'Activity reopened' });
+        await load();
+      } catch (err: any) {
+        Toast.show({
+          type: 'error',
+          text1: 'Failed to update activity',
+          text2: err?.response?.data?.message ?? 'Please try again.',
+        });
+      } finally {
+        savingRef.current = false;
+        setSavingId(null);
+      }
+    },
+    [load]
+  );
+
+  /** Complete straight away (as on web); reopening asks first. */
+  const toggleDone = useCallback(
+    (activity: Activity) => {
+      if (savingRef.current) return;
+      if (!activity.done) {
+        saveDone(activity, true);
+        return;
+      }
+      Alert.alert('Reopen activity', `Mark this ${activity.type ?? 'activity'} as pending again?`, [
+        { text: 'Cancel', style: 'cancel' },
+        { text: 'Reopen', onPress: () => saveDone(activity, false) },
+      ]);
+    },
+    [saveDone]
+  );
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -235,7 +280,12 @@ export default function SalesforceActivitiesScreen() {
                 index === 0 ? 'mt-0' : 'mt-2'
               } border border-slate-100`}
             >
-              <ActivityRow activity={item} />
+              <ActivityRow
+                activity={item}
+                onToggleDone={() => toggleDone(item)}
+                saving={savingId === item._id}
+                disabled={savingId !== null}
+              />
             </View>
           )}
           ListEmptyComponent={
