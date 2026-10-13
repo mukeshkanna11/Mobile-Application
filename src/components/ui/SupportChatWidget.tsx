@@ -75,15 +75,17 @@ export default function SupportChatWidget() {
 
   return (
     <>
-      {/* Raised above tab bars and the screens' "+" buttons so it never covers them. */}
+      {/* Stacked above the tab bar (62) + the screens' "+" FAB (bottom-6, 56) with a 16px gap,
+          right-aligned with that FAB so the two never overlap. */}
       <Pressable
         onPress={() => setOpen(true)}
         accessibilityRole="button"
-        accessibilityLabel="Open contact form"
-        style={{ position: 'absolute', right: 20, bottom: insets.bottom + 150 }}
-        className="h-14 w-14 items-center justify-center rounded-full bg-indigo-600 shadow-lg active:opacity-90"
+        accessibilityLabel="Open support chat"
+        hitSlop={8}
+        style={{ position: 'absolute', right: 24, bottom: insets.bottom + 62 + 24 + 56 + 16, elevation: 8 }}
+        className="h-14 w-14 items-center justify-center rounded-full border-2 border-white bg-indigo-600 shadow-lg active:opacity-90"
       >
-        <MaterialCommunityIcons name="brain" size={26} color="#ffffff" />
+        <Feather name="message-circle" size={26} color="#ffffff" />
       </Pressable>
 
       <Modal visible={open} animationType="slide" presentationStyle="pageSheet" onRequestClose={close}>

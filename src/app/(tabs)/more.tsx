@@ -51,6 +51,14 @@ const MODULES: ModuleEntry[] = [
     onPress: () => router.push('/whatsapp'),
   },
   {
+    label: 'Meta Integration',
+    description: 'Facebook, Instagram and WhatsApp Business connection',
+    icon: 'link',
+    tint: 'bg-blue-50',
+    color: '#2563eb',
+    onPress: () => router.push('/integrations/meta'),
+  },
+  {
     label: 'AI Tools',
     description: 'Content, SEO, email, communication and sales recommendations',
     icon: 'cpu',
