@@ -57,10 +57,11 @@
       "reactCompiler": true
     },
     "extra": {
-      "router": {},
-      "eas": {
-        "projectId": "36cd01b0-2e94-4f25-af1e-786a915dd065"
-      }
-    }
+  "router": {},
+  "eas": {
+    "projectId": "36cd01b0-2e94-4f25-af1e-786a915dd065"
+  }
+},
+"owner": "readytechsolutions"
   }
 }
