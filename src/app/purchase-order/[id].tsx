@@ -1,4 +1,4 @@
-import { useFocusEffect, useLocalSearchParams } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -11,6 +11,7 @@ import SearchablePicker from '@/components/ui/SearchablePicker';
 import { LoadingState, MessageState } from '@/components/ui/StateView';
 import { money } from '@/services/invoices';
 import {
+  deletePurchaseOrder,
   fetchPurchaseOrder,
   lineTotal,
   poTotal,
@@ -25,6 +26,7 @@ import {
   warehousePickerOptions,
   type Warehouse,
 } from '@/services/warehouses';
+import { goBackOr } from '@/utils/nav';
 
 const formatDate = (iso?: string) =>
   iso ? new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : undefined;
@@ -39,6 +41,7 @@ export default function PurchaseOrderDetailsScreen() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [warehouse, setWarehouse] = useState('');
   const [receiving, setReceiving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     if (!id) return;
@@ -106,6 +109,31 @@ export default function PurchaseOrderDetailsScreen() {
     ]);
   };
 
+  /** DRAFT only — a received PO has already posted stock (backend enforces too). */
+  const confirmDelete = () => {
+    if (!id || !po) return;
+    Alert.alert('Delete purchase order', `Delete ${po.poNumber}? This cannot be undone.`, [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete',
+        style: 'destructive',
+        onPress: async () => {
+          try {
+            setDeleting(true);
+            await deletePurchaseOrder(id);
+            Toast.show({ type: 'success', text1: 'Purchase order deleted' });
+            goBackOr('/purchase-orders');
+          } catch (err: any) {
+            Toast.show({ type: 'error', text1: err?.response?.data?.message ?? 'Delete failed' });
+            load();
+          } finally {
+            setDeleting(false);
+          }
+        },
+      },
+    ]);
+  };
+
   const received = po?.status === 'RECEIVED';
 
   return (
@@ -114,7 +142,22 @@ export default function PurchaseOrderDetailsScreen() {
         onBack
         title="Purchase Order"
         badge="ERP"
-        right={po ? <HeaderAction icon="refresh-cw" onPress={load} /> : undefined}
+        right={
+          po ? (
+            <>
+              <HeaderAction icon="refresh-cw" onPress={load} />
+              {po.status === 'DRAFT' ? (
+                <>
+                  <HeaderAction
+                    icon="edit-2"
+                    onPress={() => router.push({ pathname: '/purchase-order/edit/[id]', params: { id: po._id } })}
+                  />
+                  <HeaderAction icon="trash-2" color="#fecaca" disabled={deleting || receiving} onPress={confirmDelete} />
+                </>
+              ) : null}
+            </>
+          ) : undefined
+        }
       >
         {po ? (
           <View className="mt-4">

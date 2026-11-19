@@ -134,11 +134,14 @@ export default function InvoicesScreen() {
         badge="ReadyTech Solutions"
         subtitle="Manage, track and download invoices"
         right={
-          <HeaderAction
-            icon="refresh-cw"
-            onPress={onRefresh}
-            color={refreshing ? '#a5b4fc' : '#ffffff'}
-          />
+          <>
+            <HeaderAction icon="bar-chart-2" onPress={() => router.push('/invoice/analytics')} />
+            <HeaderAction
+              icon="refresh-cw"
+              onPress={onRefresh}
+              color={refreshing ? '#a5b4fc' : '#ffffff'}
+            />
+          </>
         }
       >
         <ScrollView

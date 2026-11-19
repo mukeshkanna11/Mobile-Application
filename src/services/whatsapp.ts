@@ -11,6 +11,11 @@ import API from '@/services/api';
  *           -> 201 { success, data: Message }
  *           -> 409 { code: 'WINDOW_EXPIRED', message }  (24-hour window closed)
  *   PATCH /whatsapp/conversations/:id/read      -> { success, data: Conversation }
+ *   PATCH /whatsapp/conversations/:id   { status?: Open|Pending|Closed, assignedTo?: userId|null }
+ *   POST  /whatsapp/conversations/:id/notes { body }  -> { data: Conversation } (internal, never sent)
+ *   POST  /whatsapp/conversations/:id/lead           -> { data: Conversation } (links/creates a Lead once)
+ *   GET   /whatsapp/conversations/:id/messages/:messageId/media  -> media bytes (auth proxy)
+ *   GET   /whatsapp/assignees                        -> { data: [{ _id, name, email, role }] } (workspace users)
  * Account sync/subscribe (admin Meta setup) and webhooks are web/backend only.
  */
 
@@ -30,7 +35,26 @@ export interface Conversation {
   lead?: { _id: string; name?: string; company?: string; status?: string } | null;
   client?: { _id: string; companyName?: string; contactPerson?: string } | null;
   assignedTo?: { _id: string; name?: string; email?: string } | null;
+  notes?: ConversationNote[];
+  channel?: string;
   createdAt?: string;
+}
+
+export interface ConversationNote {
+  _id: string;
+  body: string;
+  authorName?: string;
+  createdAt: string;
+}
+
+export const CONVERSATION_STATUSES = ['Open', 'Pending', 'Closed'] as const;
+export type ConversationStatus = (typeof CONVERSATION_STATUSES)[number];
+
+export interface Assignee {
+  _id: string;
+  name?: string;
+  email?: string;
+  role?: string;
 }
 
 export interface WhatsAppMessage {
@@ -41,6 +65,14 @@ export interface WhatsAppMessage {
   timestamp: string;
   status?: MessageStatus;
   error?: { code?: string | null; title?: string | null; message?: string | null } | null;
+  /** WhatsApp media (fetched via the auth proxy) or IG/Messenger CDN attachments */
+  meta?: {
+    type?: string;
+    mediaId?: string | null;
+    mimeType?: string | null;
+    filename?: string | null;
+    attachments?: { type?: string; url?: string }[];
+  } | null;
 }
 
 export interface Pagination {
@@ -81,14 +113,79 @@ export async function fetchMessages(id: string, { page = 1, limit = 30 } = {}) {
   };
 }
 
-export async function sendWhatsAppMessage(id: string, text: string): Promise<WhatsAppMessage> {
-  const { data } = await API.post(`/whatsapp/conversations/${id}/messages`, { text });
+/** Outbound attachment — same payload as the web: data URL + MIME type + file name. */
+export interface OutboundMedia {
+  data: string;
+  mimeType: string;
+  filename: string;
+}
+
+export async function sendWhatsAppMessage(id: string, text: string, media?: OutboundMedia | null): Promise<WhatsAppMessage> {
+  const { data } = await API.post(`/whatsapp/conversations/${id}/messages`, { text, ...(media ? { media } : {}) });
   return data?.data as WhatsAppMessage;
+}
+
+/* Mirrors the backend OUTBOUND_RULES (WhatsApp Cloud API limits). The request
+   body is JSON (base64, ~33% larger) under the server's 10 MB body limit, so
+   the effective cap is ~7 MB for every type — same as the website. */
+const MB = 1024 * 1024;
+const BODY_CAP = 7 * MB;
+const OUTBOUND_RULES: [RegExp, string, number][] = [
+  [/^image\/(jpeg|png)$/, 'image', 5 * MB],
+  [/^video\/(mp4|3gpp)$/, 'video', 16 * MB],
+  [/^audio\/(aac|amr|mpeg|mp4|ogg)$/, 'audio', 16 * MB],
+  [/^(application\/pdf|text\/plain|application\/msword|application\/vnd\.ms-(excel|powerpoint)|application\/vnd\.openxmlformats-officedocument\.(wordprocessingml\.document|spreadsheetml\.sheet|presentationml\.presentation))$/, 'document', 100 * MB],
+];
+
+/** MIME types offered by the picker. */
+export const OUTBOUND_MIME_TYPES = [
+  'image/jpeg', 'image/png', 'video/mp4', 'video/3gpp',
+  'audio/aac', 'audio/amr', 'audio/mpeg', 'audio/mp4', 'audio/ogg',
+  'application/pdf', 'text/plain', 'application/msword', 'application/vnd.ms-excel', 'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+];
+
+/** Client-side check before upload; the backend validates again. */
+export function outboundMediaError(mimeType?: string | null, size?: number | null): string | null {
+  const rule = OUTBOUND_RULES.find(([re]) => re.test(String(mimeType || '')));
+  if (!rule) return 'WhatsApp accepts JPEG/PNG, MP4, AAC/MP3/OGG audio, PDF and Office documents.';
+  const limit = Math.min(rule[2], BODY_CAP);
+  if (size && size > limit) return `File is too large — maximum ${Math.round(limit / MB)} MB for ${rule[1]}s.`;
+  return null;
 }
 
 export async function markConversationRead(id: string): Promise<void> {
   await API.patch(`/whatsapp/conversations/${id}/read`);
 }
+
+export async function updateConversation(
+  id: string,
+  patch: { status?: ConversationStatus; assignedTo?: string | null }
+): Promise<Conversation> {
+  const { data } = await API.patch(`/whatsapp/conversations/${id}`, patch);
+  return data?.data as Conversation;
+}
+
+export async function addConversationNote(id: string, body: string): Promise<Conversation> {
+  const { data } = await API.post(`/whatsapp/conversations/${id}/notes`, { body });
+  return data?.data as Conversation;
+}
+
+export async function convertConversationToLead(id: string): Promise<Conversation> {
+  const { data } = await API.post(`/whatsapp/conversations/${id}/lead`);
+  return data?.data as Conversation;
+}
+
+export async function fetchAssignees(): Promise<Assignee[]> {
+  const { data } = await API.get('/whatsapp/assignees');
+  return (data?.data ?? []) as Assignee[];
+}
+
+/** Absolute URL of the authenticated media proxy (send with the Bearer token). */
+export const mediaUrl = (conversationId: string, messageId: string) =>
+  `${API.defaults.baseURL ?? ''}/whatsapp/conversations/${conversationId}/messages/${messageId}/media`;
 
 /** Backend error code when the 24-hour customer service window has closed. */
 export const isWindowExpired = (err: unknown) =>

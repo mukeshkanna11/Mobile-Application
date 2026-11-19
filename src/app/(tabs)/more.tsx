@@ -19,6 +19,22 @@ interface ModuleEntry {
 
 const MODULES: ModuleEntry[] = [
   {
+    label: 'My Profile',
+    description: 'Your details — name and phone',
+    icon: 'user',
+    tint: 'bg-indigo-50',
+    color: '#4f46e5',
+    onPress: () => router.push('/profile'),
+  },
+  {
+    label: 'Notifications',
+    description: 'New leads, deals, invoices, orders and security alerts',
+    icon: 'bell',
+    tint: 'bg-rose-50',
+    color: '#e11d48',
+    onPress: () => router.push('/notifications'),
+  },
+  {
     label: 'Salesforce',
     description: 'CRM workspace — dashboard, leads, pipeline and activities',
     icon: 'trending-up',

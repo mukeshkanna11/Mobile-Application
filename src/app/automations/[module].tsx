@@ -59,9 +59,10 @@ export default function CrmAutomationListScreen() {
 
   const stats = useMemo(
     () => ({
+      // Same formulas as the web Automations page (over the filtered list)
       active: items.filter((a) => a.status === 'active').length,
+      draftPaused: items.filter((a) => a.status === 'draft' || a.status === 'paused').length,
       executions: items.reduce((s, a) => s + (a.executionCount || 0), 0),
-      failures: items.reduce((s, a) => s + (a.failureCount || 0), 0),
     }),
     [items]
   );
@@ -140,8 +141,8 @@ export default function CrmAutomationListScreen() {
           {[
             ['Total', items.length],
             ['Active', stats.active],
+            ['Draft / Paused', stats.draftPaused],
             ['Runs', stats.executions],
-            ['Failures', stats.failures],
           ].map(([label, value]) => (
             <View key={label} className="flex-1 rounded-2xl border border-white/10 bg-white/10 p-3">
               <Text className="text-[11px] text-slate-300">{label}</Text>

@@ -385,11 +385,19 @@ export interface AutomationTemplate {
   preset: AutomationInput;
 }
 
+/**
+ * Same templates, names and descriptions as the web Templates page
+ * (Frontend/src/pages/Automation/AutomationTemplates.jsx, also a local list —
+ * there is no backend templates endpoint). Only templates for the CRM modules
+ * this app's builder supports are listed; the web's Products / Inventory /
+ * Tasks / Sales Orders templates need those modules in mobile first.
+ * Presets use only trigger events and actions the backend supports.
+ */
 export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
   {
     id: 'lead-follow-up',
     name: 'New Lead Follow-up',
-    description: 'Assign a new lead, send a welcome email, and create a follow-up task.',
+    description: 'Automatically assign a new lead, send a welcome email, and create a follow-up task.',
     icon: 'users',
     preset: {
       ...emptyAutomation('Lead'),
@@ -405,7 +413,7 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
   {
     id: 'lead-score',
     name: 'Lead Score & Assignment',
-    description: 'Prioritise leads from a chosen source and assign them to sales.',
+    description: 'Score incoming leads based on source and automatically assign qualified leads to sales.',
     icon: 'trending-up',
     preset: {
       ...emptyAutomation('Lead'),
@@ -419,12 +427,12 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
   },
   {
     id: 'deal-won',
-    name: 'Deal Won → Onboarding',
-    description: 'When an opportunity is won, create onboarding tasks and email the customer.',
+    name: 'Deal Won → Client',
+    description: 'Convert a successful opportunity into a client and automatically create onboarding tasks.',
     icon: 'award',
     preset: {
       ...emptyAutomation('Opportunity'),
-      name: 'Deal Won → Onboarding',
+      name: 'Deal Won → Client',
       event: 'stageChanged',
       conditions: [{ field: 'stage', operator: 'equals', value: 'Closed Won' }],
       actions: [
@@ -436,7 +444,7 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
   {
     id: 'client-welcome',
     name: 'New Client Welcome',
-    description: 'Send a welcome email, create an onboarding task and notify the team.',
+    description: 'Send a professional welcome email and create an onboarding checklist for every new client.',
     icon: 'briefcase',
     preset: {
       ...emptyAutomation('Client'),
@@ -449,14 +457,34 @@ export const AUTOMATION_TEMPLATES: AutomationTemplate[] = [
     },
   },
   {
+    id: 'invoice-overdue',
+    name: 'Invoice Overdue Reminder',
+    description: 'Automatically remind customers when an invoice becomes overdue and notify the finance team.',
+    icon: 'alert-circle',
+    preset: {
+      ...emptyAutomation('Invoice'),
+      name: 'Invoice Overdue Reminder',
+      event: 'statusChanged',
+      conditions: [{ field: 'status', operator: 'equals', value: 'Overdue' }],
+      actions: [
+        { type: 'sendEmail', config: { subject: 'Payment reminder: your invoice is overdue' } },
+        { type: 'sendNotification', config: { message: 'An invoice is overdue.' } },
+      ],
+    },
+  },
+  {
     id: 'invoice-created',
     name: 'Invoice Created Notification',
-    description: 'Email the customer as soon as an invoice is created.',
+    description: 'Send the invoice to the customer automatically as soon as an invoice is created.',
     icon: 'file-text',
     preset: {
       ...emptyAutomation('Invoice'),
       name: 'Invoice Created Notification',
-      actions: [{ type: 'sendEmail', config: { subject: 'Your invoice is ready' } }],
+      actions: [
+        { type: 'sendEmail', config: { subject: 'Your invoice is ready' } },
+        { type: 'createTask', config: { title: 'Follow up on new invoice', dueInDays: '3' } },
+      ],
     },
   },
 ];
+

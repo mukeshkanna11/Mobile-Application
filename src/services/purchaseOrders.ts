@@ -10,7 +10,8 @@ import type { Product } from '@/services/products';
  *   POST /purchase              -> PurchaseOrder (unpopulated; poNumber assigned server-side)
  *   POST /purchase/:id/receive  -> { message, po } — body { warehouse } required;
  *                                  adds stock to the inventory ledger, DRAFT -> RECEIVED once.
- * There is no update/delete endpoint, so POs are create + receive only.
+ *   PUT    /purchase/:id        -> PurchaseOrder — body { vendor, items }; DRAFT only
+ *   DELETE /purchase/:id        -> { message } — DRAFT only (RECEIVED already posted stock)
  */
 
 export type POStatus = 'DRAFT' | 'RECEIVED';
@@ -96,6 +97,33 @@ export async function createPurchaseOrder(input: POInput): Promise<PurchaseOrder
   const { data } = await API.post('/purchase', payload);
   return data as PurchaseOrder;
 }
+
+const toPayload = (input: POInput) => ({
+  vendor: input.vendor,
+  items: input.items
+    .filter((i) => i.product)
+    .map((i) => ({ product: i.product, qty: Number(i.qty), cost: Number(i.cost) || 0 })),
+});
+
+/** Same payload and rules as the web edit (DRAFT purchase orders only). */
+export async function updatePurchaseOrder(id: string, input: POInput): Promise<PurchaseOrder> {
+  const { data } = await API.put(`/purchase/${id}`, toPayload(input));
+  return data as PurchaseOrder;
+}
+
+export async function deletePurchaseOrder(id: string): Promise<void> {
+  await API.delete(`/purchase/${id}`);
+}
+
+const refId = (r: Ref) => (r && typeof r === 'object' ? r._id : r || '');
+
+/** Prefills the form from a loaded PO (populated or raw refs). */
+export const toPOInput = (po: PurchaseOrder): POInput => ({
+  vendor: refId(po.vendor),
+  items: po.items.length
+    ? po.items.map((i) => ({ product: refId(i.product), qty: String(i.qty), cost: String(i.cost) }))
+    : [{ ...emptyPOItem }],
+});
 
 export async function receivePurchaseOrder(id: string, warehouse: string): Promise<void> {
   await API.post(`/purchase/${id}/receive`, { warehouse });

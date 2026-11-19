@@ -1,4 +1,7 @@
 import { Feather } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
+import { File } from 'expo-file-system';
+import { Image } from 'expo-image';
 import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
 import {
@@ -7,6 +10,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
+  ScrollView,
   Text,
   TextInput,
   View,
@@ -14,7 +18,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Toast from 'react-native-toast-message';
 
+import ConversationDetails from '@/components/ui/ConversationDetails';
 import EnterpriseHeader, { HeaderAction } from '@/components/ui/EnterpriseHeader';
+import WhatsAppMedia from '@/components/ui/WhatsAppMedia';
 import { LoadingState, MessageState } from '@/components/ui/StateView';
 import { isForbidden } from '@/services/products';
 import {
@@ -23,6 +29,8 @@ import {
   isWindowExpired,
   markConversationRead,
   mergeMessages,
+  OUTBOUND_MIME_TYPES,
+  outboundMediaError,
   sendWhatsAppMessage,
   type Conversation,
   type MessageStatus,
@@ -46,7 +54,7 @@ const STATUS_ICON: Record<MessageStatus, { icon: FeatherName; color: string }> =
 const timeOf = (iso: string) =>
   new Date(iso).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' });
 
-function Bubble({ m }: { m: WhatsAppMessage }) {
+function Bubble({ m, conversationId }: { m: WhatsAppMessage; conversationId: string }) {
   const out = m.direction === 'outbound';
   const st = out && m.status ? STATUS_ICON[m.status] : null;
   return (
@@ -56,9 +64,12 @@ function Bubble({ m }: { m: WhatsAppMessage }) {
           out ? 'rounded-br-md bg-indigo-600' : 'rounded-bl-md border border-slate-100 bg-white'
         } ${m.status === 'failed' ? 'bg-red-600' : ''}`}
       >
-        <Text className={`text-sm leading-5 ${out ? 'text-white' : 'text-slate-800'}`}>
-          {m.body || (m.type && m.type !== 'text' ? `[${m.type}]` : '')}
-        </Text>
+        <WhatsAppMedia conversationId={conversationId} m={m} outbound={out} />
+        {m.body && !(m.meta?.mediaId && m.body === `[${m.type}]`) ? (
+          <Text className={`text-sm leading-5 ${out ? 'text-white' : 'text-slate-800'}`}>{m.body}</Text>
+        ) : !m.meta?.mediaId && m.type && m.type !== 'text' ? (
+          <Text className={`text-sm leading-5 ${out ? 'text-white' : 'text-slate-800'}`}>[{m.type}]</Text>
+        ) : null}
         <View className="mt-1 flex-row items-center justify-end">
           <Text className={`text-[10px] ${out ? 'text-indigo-100' : 'text-slate-400'}`}>{timeOf(m.timestamp)}</Text>
           {st ? <Feather name={st.icon} size={11} color={st.color} style={{ marginLeft: 4 }} /> : null}
@@ -83,6 +94,8 @@ export default function WhatsAppThreadScreen() {
   const [loadingOlder, setLoadingOlder] = useState(false);
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
+  const [showDetails, setShowDetails] = useState(false);
+  const [attachment, setAttachment] = useState<DocumentPicker.DocumentPickerAsset | null>(null);
   const sendingRef = useRef(false);
   const loadedRef = useRef(false);
 
@@ -136,15 +149,46 @@ export default function WhatsAppThreadScreen() {
   }, [id, hasOlder, loadingOlder, olderPage]);
 
   const windowOpen = conversation?.window?.open !== false;
+  // Attachments are WhatsApp-only (Instagram / Messenger replies are text)
+  const canAttach = !conversation?.channel || conversation.channel === 'whatsapp';
+
+  const pickFile = async () => {
+    try {
+      const res = await DocumentPicker.getDocumentAsync({
+        type: OUTBOUND_MIME_TYPES,
+        copyToCacheDirectory: true,
+        multiple: false,
+      });
+      if (res.canceled || !res.assets?.length) return;
+      const asset = res.assets[0];
+      const problem = outboundMediaError(asset.mimeType, asset.size);
+      if (problem) {
+        Toast.show({ type: 'error', text1: 'Attachment not supported', text2: problem });
+        return;
+      }
+      setAttachment(asset);
+    } catch {
+      Toast.show({ type: 'error', text1: "Couldn't open the file picker" });
+    }
+  };
 
   const send = async () => {
     const body = text.trim();
-    if (!id || !body || sendingRef.current) return;
+    if (!id || (!body && !attachment) || sendingRef.current) return;
     sendingRef.current = true;
     setSending(true);
     try {
-      await sendWhatsAppMessage(id, body);
+      // Same payload as the web: { data: data URL, mimeType, filename }
+      const media = attachment
+        ? {
+            data: `data:${attachment.mimeType};base64,${await new File(attachment.uri).base64()}`,
+            mimeType: attachment.mimeType || 'application/octet-stream',
+            filename: attachment.name,
+          }
+        : null;
+      await sendWhatsAppMessage(id, body, media);
       setText('');
+      setAttachment(null);
     } catch (err: any) {
       Toast.show({
         type: 'error',
@@ -178,6 +222,13 @@ export default function WhatsAppThreadScreen() {
                 onPress={() => router.push({ pathname: '/lead/[id]', params: { id: conversation.lead!._id } })}
               />
             ) : null}
+            {conversation ? (
+              <HeaderAction
+                icon="info"
+                onPress={() => setShowDetails((v) => !v)}
+                color={showDetails ? '#c7d2fe' : '#ffffff'}
+              />
+            ) : null}
             <HeaderAction icon="refresh-cw" onPress={() => load()} />
           </>
         }
@@ -205,6 +256,11 @@ export default function WhatsAppThreadScreen() {
         />
       ) : (
         <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          {showDetails && conversation ? (
+            <ScrollView style={{ maxHeight: 360 }} keyboardShouldPersistTaps="handled">
+              <ConversationDetails conversation={conversation} onChange={setConversation} />
+            </ScrollView>
+          ) : null}
           <FlatList
             data={inverted}
             inverted
@@ -212,7 +268,7 @@ export default function WhatsAppThreadScreen() {
             contentContainerStyle={{ padding: 16, flexGrow: 1 }}
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
-            renderItem={({ item }) => <Bubble m={item} />}
+            renderItem={({ item }) => <Bubble m={item} conversationId={id!} />}
             onEndReached={loadOlder}
             onEndReachedThreshold={0.3}
             ListFooterComponent={
@@ -242,10 +298,49 @@ export default function WhatsAppThreadScreen() {
             </View>
           ) : null}
 
-          <View className="flex-row items-end gap-2 border-t border-slate-200 bg-white px-3 py-2">
+          {attachment ? (
+            <View className="flex-row items-center gap-3 border-t border-slate-200 bg-white px-3 pt-2">
+              {/^image\//.test(attachment.mimeType || '') ? (
+                <Image source={{ uri: attachment.uri }} style={{ width: 44, height: 44, borderRadius: 10 }} contentFit="cover" />
+              ) : (
+                <View className="h-11 w-11 items-center justify-center rounded-xl bg-slate-100">
+                  <Feather name="file" size={18} color="#475569" />
+                </View>
+              )}
+              <View className="min-w-0 flex-1">
+                <Text className="text-sm font-medium text-slate-800" numberOfLines={1}>
+                  {attachment.name}
+                </Text>
+                <Text className="text-xs text-slate-500">
+                  {attachment.size ? `${(attachment.size / 1024 / 1024).toFixed(2)} MB` : attachment.mimeType}
+                </Text>
+              </View>
+              <Pressable
+                onPress={() => setAttachment(null)}
+                disabled={sending}
+                accessibilityLabel="Remove attachment"
+                className="h-8 w-8 items-center justify-center rounded-full bg-slate-100"
+              >
+                <Feather name="x" size={15} color="#475569" />
+              </Pressable>
+            </View>
+          ) : null}
+
+          <View className={`flex-row items-end gap-2 bg-white px-3 py-2 ${attachment ? '' : 'border-t border-slate-200'}`}>
+            {canAttach ? (
+              <Pressable
+                onPress={pickFile}
+                disabled={!windowOpen || sending}
+                accessibilityRole="button"
+                accessibilityLabel="Attach file"
+                className="h-11 w-11 items-center justify-center rounded-full bg-slate-100 active:bg-slate-200"
+              >
+                <Feather name="paperclip" size={18} color={!windowOpen ? '#cbd5e1' : '#475569'} />
+              </Pressable>
+            ) : null}
             <TextInput
               className="max-h-28 flex-1 rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-2.5 text-base text-slate-800"
-              placeholder={windowOpen ? 'Type a message' : 'Reply window expired'}
+              placeholder={windowOpen ? (attachment ? 'Add a caption (optional)' : 'Type a message') : 'Reply window expired'}
               placeholderTextColor="#94a3b8"
               value={text}
               onChangeText={setText}
@@ -255,11 +350,11 @@ export default function WhatsAppThreadScreen() {
             />
             <Pressable
               onPress={send}
-              disabled={!windowOpen || sending || !text.trim()}
+              disabled={!windowOpen || sending || (!text.trim() && !attachment)}
               accessibilityRole="button"
               accessibilityLabel="Send message"
               className={`h-11 w-11 items-center justify-center rounded-full ${
-                !windowOpen || !text.trim() ? 'bg-slate-300' : 'bg-emerald-600 active:opacity-80'
+                !windowOpen || (!text.trim() && !attachment) ? 'bg-slate-300' : 'bg-emerald-600 active:opacity-80'
               }`}
             >
               {sending ? <ActivityIndicator color="#ffffff" /> : <Feather name="send" size={18} color="#ffffff" />}

@@ -1,4 +1,5 @@
 import { Feather } from '@expo/vector-icons';
+import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { KeyboardAvoidingView, Platform, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -14,6 +15,9 @@ import { fetchProducts, isForbidden, type Product } from '@/services/products';
 import {
   createPurchaseOrder,
   defaultCost,
+  fetchPurchaseOrder,
+  toPOInput,
+  updatePurchaseOrder,
   emptyPO,
   emptyPOItem,
   lineTotal,
@@ -27,7 +31,11 @@ import { goBackOr } from '@/utils/nav';
 
 const num = (t: string) => t.replace(/[^0-9.]/g, '');
 
+/** Create, or edit when opened as /purchase-order/edit/[id] (DRAFT only). */
 export default function NewPurchaseOrderScreen() {
+  const { id } = useLocalSearchParams<{ id?: string }>();
+  const isEdit = !!id;
+  const [locked, setLocked] = useState(false);
   const [vendors, setVendors] = useState<Vendor[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -38,15 +46,19 @@ export default function NewPurchaseOrderScreen() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    Promise.all([fetchVendors(), fetchProducts()])
-      .then(([v, p]) => {
+    Promise.all([fetchVendors(), fetchProducts(), id ? fetchPurchaseOrder(id) : Promise.resolve(null)])
+      .then(([v, p, po]) => {
         setVendors(v);
         setProducts(p);
+        if (po) {
+          setLocked(po.status !== 'DRAFT');
+          setForm(toPOInput(po));
+        }
         setError(false);
       })
       .catch((err) => (isForbidden(err) ? setForbidden(true) : setError(true)))
       .finally(() => setLoading(false));
-  }, [reloadKey]);
+  }, [reloadKey, id]);
 
   const vendorOpts = useMemo(() => vendorOptions(vendors), [vendors]);
   const productOpts = useMemo(() => productOptions(products), [products]);
@@ -76,8 +88,9 @@ export default function NewPurchaseOrderScreen() {
     }
     try {
       setSaving(true);
-      await createPurchaseOrder(form);
-      Toast.show({ type: 'success', text1: 'Purchase order created' });
+      if (id) await updatePurchaseOrder(id, form);
+      else await createPurchaseOrder(form);
+      Toast.show({ type: 'success', text1: id ? 'Purchase order updated' : 'Purchase order created' });
       goBackOr('/purchase-orders');
     } catch (e: any) {
       Toast.show({
@@ -92,7 +105,12 @@ export default function NewPurchaseOrderScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
-      <EnterpriseHeader onBack icon="plus" title="New Purchase Order" subtitle="Order stock from a vendor" />
+      <EnterpriseHeader
+        onBack
+        icon={isEdit ? 'edit-2' : 'plus'}
+        title={isEdit ? 'Edit Purchase Order' : 'New Purchase Order'}
+        subtitle={isEdit ? 'Change vendor or items (draft only)' : 'Order stock from a vendor'}
+      />
 
       {loading ? (
         <LoadingState label="Loading vendors & products…" />
@@ -101,6 +119,12 @@ export default function NewPurchaseOrderScreen() {
           icon="lock"
           title="Admin access required"
           message="Products can only be loaded by admin users. Ask an administrator to create this purchase order or to grant you access."
+        />
+      ) : locked ? (
+        <MessageState
+          icon="lock"
+          title="Purchase order already received"
+          message="Received purchase orders can't be edited because stock has already been updated."
         />
       ) : error ? (
         <MessageState
@@ -195,7 +219,7 @@ export default function NewPurchaseOrderScreen() {
             </View>
 
             <PrimaryButton
-              label="Create Purchase Order"
+              label={isEdit ? 'Save Changes' : 'Create Purchase Order'}
               loadingLabel="Saving…"
               loading={saving}
               onPress={handleSubmit}
