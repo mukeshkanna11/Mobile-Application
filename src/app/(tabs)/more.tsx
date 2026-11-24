@@ -1,9 +1,11 @@
 import { Feather } from '@expo/vector-icons';
 import { router } from 'expo-router';
-import { Pressable, ScrollView, Text, View } from 'react-native';
+import { useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import EnterpriseHeader from '@/components/ui/EnterpriseHeader';
+import { logout } from '@/services/auth';
 import { CRM_AUTOMATION_MODULES } from '@/services/automations';
 
 type FeatherName = keyof typeof Feather.glyphMap;
@@ -17,86 +19,147 @@ interface ModuleEntry {
   onPress: () => void;
 }
 
-const MODULES: ModuleEntry[] = [
+interface MenuSection {
+  title: string;
+  icon: FeatherName;
+  items: ModuleEntry[];
+}
+
+/** Former bottom tabs + every former More option, grouped by area. */
+const SECTIONS: MenuSection[] = [
   {
-    label: 'My Profile',
-    description: 'Your details — name and phone',
-    icon: 'user',
-    tint: 'bg-indigo-50',
-    color: '#4f46e5',
-    onPress: () => router.push('/profile'),
+    title: 'Main',
+    icon: 'home',
+    items: [
+    {
+      label: 'Dashboard',
+      description: 'Executive overview across CRM and ERP',
+      icon: 'grid',
+      tint: 'bg-indigo-50',
+      color: '#4f46e5',
+      onPress: () => router.navigate('/dashboard'),
+    },
+    {
+      label: 'Clients',
+      description: 'Customer accounts and contacts',
+      icon: 'users',
+      tint: 'bg-sky-50',
+      color: '#0284c7',
+      onPress: () => router.push('/clients'),
+    },
+    {
+      label: 'Leads',
+      description: 'Capture, qualify and convert leads',
+      icon: 'target',
+      tint: 'bg-violet-50',
+      color: '#7c3aed',
+      onPress: () => router.push('/leads'),
+    },
+    ],
   },
   {
-    label: 'Notifications',
-    description: 'New leads, deals, invoices, orders and security alerts',
-    icon: 'bell',
-    tint: 'bg-rose-50',
-    color: '#e11d48',
-    onPress: () => router.push('/notifications'),
-  },
-  {
-    label: 'Salesforce',
-    description: 'CRM workspace — dashboard, leads, pipeline and activities',
+    title: 'Sales & CRM',
     icon: 'trending-up',
-    tint: 'bg-indigo-50',
-    color: '#4f46e5',
-    onPress: () => router.push('/salesforce'),
+    items: [
+    {
+      label: 'Salesforce',
+      description: 'CRM workspace — dashboard, leads, pipeline and activities',
+      icon: 'trending-up',
+      tint: 'bg-indigo-50',
+      color: '#4f46e5',
+      onPress: () => router.push('/salesforce'),
+    },
+    {
+      label: 'Opportunities',
+      description: 'Sales pipeline, deal stages and follow-ups',
+      icon: 'target',
+      tint: 'bg-violet-50',
+      color: '#7c3aed',
+      onPress: () => router.push('/opportunities'),
+    },
+    {
+      label: 'Invoices',
+      description: 'Billing — create, send and track invoices',
+      icon: 'file-text',
+      tint: 'bg-amber-50',
+      color: '#d97706',
+      onPress: () => router.push('/invoices'),
+    },
+    ],
   },
   {
-    label: 'Opportunities',
-    description: 'Sales pipeline, deal stages and follow-ups',
-    icon: 'target',
-    tint: 'bg-violet-50',
-    color: '#7c3aed',
-    onPress: () => router.push('/opportunities'),
+    title: 'Communication',
+    icon: 'message-square',
+    items: [
+    {
+      label: 'WhatsApp Inbox',
+      description: 'Customer conversations — read and reply',
+      icon: 'message-circle',
+      tint: 'bg-emerald-50',
+      color: '#059669',
+      onPress: () => router.push('/whatsapp'),
+    },
+    {
+      label: 'Integrations',
+      description: 'WhatsApp, Instagram, Facebook / Meta, Email and Shopify',
+      icon: 'grid',
+      tint: 'bg-blue-50',
+      color: '#2563eb',
+      onPress: () => router.push('/integrations'),
+    },
+    {
+      label: 'AI Tools',
+      description: 'Content, SEO, email, communication and sales recommendations',
+      icon: 'cpu',
+      tint: 'bg-fuchsia-50',
+      color: '#c026d3',
+      onPress: () => router.push('/ai'),
+    },
+    ],
   },
   {
-    label: 'Invoices',
-    description: 'Billing — create, send and track invoices',
-    icon: 'file-text',
-    tint: 'bg-amber-50',
-    color: '#d97706',
-    onPress: () => router.push('/invoices'),
-  },
-  {
-    label: 'WhatsApp Inbox',
-    description: 'Customer conversations — read and reply',
-    icon: 'message-circle',
-    tint: 'bg-emerald-50',
-    color: '#059669',
-    onPress: () => router.push('/whatsapp'),
-  },
-  {
-    label: 'Meta Integration',
-    description: 'Facebook, Instagram and WhatsApp Business connection',
-    icon: 'link',
-    tint: 'bg-blue-50',
-    color: '#2563eb',
-    onPress: () => router.push('/integrations/meta'),
-  },
-  {
-    label: 'AI Tools',
-    description: 'Content, SEO, email, communication and sales recommendations',
-    icon: 'cpu',
-    tint: 'bg-fuchsia-50',
-    color: '#c026d3',
-    onPress: () => router.push('/ai'),
-  },
-  {
-    label: 'Users',
-    description: 'Team members, roles and access',
-    icon: 'user-check',
-    tint: 'bg-slate-100',
-    color: '#475569',
-    onPress: () => router.push('/users'),
-  },
-  {
-    label: 'Administration',
-    description: 'Security, compliance and audit logs',
+    title: 'Administration',
     icon: 'shield',
-    tint: 'bg-cyan-50',
-    color: '#0891b2',
-    onPress: () => router.push('/administration'),
+    items: [
+    {
+      label: 'Users',
+      description: 'Team members, roles and access',
+      icon: 'user-check',
+      tint: 'bg-slate-100',
+      color: '#475569',
+      onPress: () => router.push('/users'),
+    },
+    {
+      label: 'Administration',
+      description: 'Security, compliance and audit logs',
+      icon: 'shield',
+      tint: 'bg-cyan-50',
+      color: '#0891b2',
+      onPress: () => router.push('/administration'),
+    },
+    ],
+  },
+  {
+    title: 'Account',
+    icon: 'user',
+    items: [
+    {
+      label: 'My Profile',
+      description: 'Your details — name and phone',
+      icon: 'user',
+      tint: 'bg-indigo-50',
+      color: '#4f46e5',
+      onPress: () => router.push('/profile'),
+    },
+    {
+      label: 'Notifications',
+      description: 'New leads, deals, invoices, orders and security alerts',
+      icon: 'bell',
+      tint: 'bg-rose-50',
+      color: '#e11d48',
+      onPress: () => router.push('/notifications'),
+    },
+    ],
   },
 ];
 
@@ -168,68 +231,88 @@ const ERP_MODULES: ModuleEntry[] = [
   },
 ];
 
-const SECTION_ICON: Record<string, FeatherName> = { ERP: 'layers', 'CRM Automations': 'zap' };
+/** Full-screen Menu (route /more): replaces the bottom tab bar and the old More page. */
+export default function MenuScreen() {
+  const [signingOut, setSigningOut] = useState(false);
 
-export default function MoreScreen() {
+  const sections: MenuSection[] = [
+    ...SECTIONS.slice(0, 2),
+    { title: 'ERP', icon: 'layers', items: ERP_MODULES },
+    ...SECTIONS.slice(2, 3),
+    {
+      title: 'CRM Automations',
+      icon: 'zap',
+      items: CRM_AUTOMATION_MODULES.map((m) => ({
+        ...m,
+        onPress: () => router.push({ pathname: '/automations/[module]', params: { module: m.module } }),
+      })),
+    },
+    ...SECTIONS.slice(3),
+  ];
+
+  // Same sign-out as the former Dashboard button
+  const handleLogout = async () => {
+    try {
+      setSigningOut(true);
+      await logout();
+      router.replace('/');
+    } catch (err) {
+      console.log('Logout error:', err);
+      setSigningOut(false);
+    }
+  };
+
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
       <EnterpriseHeader
-        icon="grid"
-        title="More"
+        onBack
+        icon="menu"
+        title="Menu"
         badge="ReadyTech Solutions"
-        subtitle="Additional workspaces and business modules"
+        subtitle="Every workspace and module in one place"
       />
 
-      <ScrollView
-        contentContainerStyle={{ padding: 20, paddingBottom: 40 }}
-        showsVerticalScrollIndicator={false}
-      >
-        <Text className="mb-3 text-xs font-semibold uppercase tracking-wide text-slate-500">
-          Workspaces
-        </Text>
-
-        {[
-          ...MODULES.map((m) => ({ ...m, section: 'Workspaces' })),
-          ...ERP_MODULES.map((m) => ({ ...m, section: 'ERP' })),
-          ...CRM_AUTOMATION_MODULES.map((m) => ({
-            ...m,
-            section: 'CRM Automations',
-            onPress: () => router.push({ pathname: '/automations/[module]', params: { module: m.module } }),
-          })),
-        ].map((mod, i, all) => (
-          <View key={mod.label}>
-            {/* Section heading whenever the group changes (ERP and CRM Automations kept separate) */}
-            {i > 0 && all[i - 1].section !== mod.section ? (
-              <View className="mb-3 mt-4 flex-row items-center gap-2">
-                <Feather name={SECTION_ICON[mod.section] ?? 'grid'} size={13} color="#4f46e5" />
-                <Text className="text-xs font-semibold uppercase tracking-wide text-slate-500">
-                  {mod.section}
-                </Text>
+      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 48 }} showsVerticalScrollIndicator={false}>
+        {sections.map((section) => (
+          <View key={section.title} className="mb-6">
+            <View className="mb-2.5 flex-row items-center gap-2 px-1">
+              <View className="h-6 w-6 items-center justify-center rounded-lg bg-indigo-50">
+                <Feather name={section.icon} size={12} color="#4f46e5" />
               </View>
-            ) : null}
-          <Pressable
-            onPress={mod.onPress}
-            className="mb-3 flex-row items-center rounded-3xl border border-slate-200 bg-white p-4 shadow-sm active:bg-slate-50"
-          >
-            <View
-              className={`h-12 w-12 shrink-0 items-center justify-center rounded-2xl ${mod.tint}`}
-            >
-              <Feather name={mod.icon} size={22} color={mod.color} />
+              <Text className="text-xs font-semibold uppercase tracking-widest text-slate-500">{section.title}</Text>
             </View>
 
-            <View className="ml-3 min-w-0 flex-1">
-              <Text className="text-base font-semibold text-slate-900">
-                {mod.label}
-              </Text>
-              <Text className="mt-0.5 text-xs leading-4 text-slate-500">
-                {mod.description}
-              </Text>
+            <View className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+              {section.items.map((mod, i) => (
+                <Pressable
+                  key={mod.label}
+                  onPress={mod.onPress}
+                  className={`flex-row items-center px-4 py-3.5 active:bg-slate-50 ${i > 0 ? 'border-t border-slate-100' : ''}`}
+                >
+                  <View className={`h-11 w-11 shrink-0 items-center justify-center rounded-2xl ${mod.tint}`}>
+                    <Feather name={mod.icon} size={20} color={mod.color} />
+                  </View>
+                  <View className="ml-3 min-w-0 flex-1">
+                    <Text className="text-[15px] font-semibold text-slate-900">{mod.label}</Text>
+                    <Text className="mt-0.5 text-xs leading-4 text-slate-500" numberOfLines={2}>
+                      {mod.description}
+                    </Text>
+                  </View>
+                  <Feather name="chevron-right" size={18} color="#cbd5e1" />
+                </Pressable>
+              ))}
             </View>
-
-            <Feather name="chevron-right" size={18} color="#cbd5e1" />
-          </Pressable>
           </View>
         ))}
+
+        <Pressable
+          onPress={handleLogout}
+          disabled={signingOut}
+          className="mt-2 flex-row items-center justify-center rounded-3xl border border-rose-200 bg-white py-4 shadow-sm active:bg-rose-50"
+        >
+          {signingOut ? <ActivityIndicator size="small" color="#e11d48" /> : <Feather name="log-out" size={18} color="#e11d48" />}
+          <Text className="ml-2 text-base font-semibold text-rose-600">Logout</Text>
+        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );

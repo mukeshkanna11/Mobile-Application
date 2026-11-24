@@ -126,6 +126,7 @@ export default function ClientsScreen() {
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
       {/* Enterprise gradient header */}
       <EnterpriseHeader
+        onBack
         icon="users"
         title="Client Management"
         badge="ReadyTech Solutions"

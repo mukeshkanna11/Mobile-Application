@@ -1,5 +1,5 @@
 import { Feather } from '@expo/vector-icons';
-import { router, useFocusEffect } from 'expo-router';
+import { router, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
@@ -83,6 +83,10 @@ function ConversationRow({ c, onPress }: { c: Conversation; onPress: () => void 
 }
 
 export default function WhatsAppInboxScreen() {
+  // ?channel=whatsapp|instagram locks the list to one channel (web WhatsAppInbox `channel` prop)
+  const params = useLocalSearchParams<{ channel?: string }>();
+  const channel = params.channel === 'instagram' || params.channel === 'whatsapp' ? params.channel : '';
+  const instagram = channel === 'instagram';
   const [items, setItems] = useState<Conversation[]>([]);
   const [pagination, setPagination] = useState<Pagination | undefined>();
   const [loading, setLoading] = useState(true);
@@ -113,7 +117,7 @@ export default function WhatsAppInboxScreen() {
     async (silent = false) => {
       try {
         const limit = silent ? Math.min(50, Math.max(PAGE_SIZE, countRef.current)) : PAGE_SIZE;
-        const res = await fetchConversations({ page: 1, limit, search: debounced, unread: unreadOnly });
+        const res = await fetchConversations({ page: 1, limit, search: debounced, unread: unreadOnly, channel });
         setItems(res.items);
         setPagination(res.pagination);
         setError(false);
@@ -127,7 +131,7 @@ export default function WhatsAppInboxScreen() {
         setRefreshing(false);
       }
     },
-    [debounced, unreadOnly]
+    [debounced, unreadOnly, channel]
   );
 
   // Loads on focus and whenever the filters change; polls only while focused.
@@ -146,7 +150,7 @@ export default function WhatsAppInboxScreen() {
     setLoadingMore(true);
     try {
       const page = Math.floor(items.length / PAGE_SIZE) + 1;
-      const res = await fetchConversations({ page, limit: PAGE_SIZE, search: debounced, unread: unreadOnly });
+      const res = await fetchConversations({ page, limit: PAGE_SIZE, search: debounced, unread: unreadOnly, channel });
       setItems((prev) => {
         const seen = new Set(prev.map((c) => c._id));
         return [...prev, ...res.items.filter((c) => !seen.has(c._id))];
@@ -157,7 +161,7 @@ export default function WhatsAppInboxScreen() {
     } finally {
       setLoadingMore(false);
     }
-  }, [hasMore, loadingMore, loading, items.length, debounced, unreadOnly]);
+  }, [hasMore, loadingMore, loading, items.length, debounced, unreadOnly, channel]);
 
   const onRefresh = () => {
     setRefreshing(true);
@@ -171,13 +175,13 @@ export default function WhatsAppInboxScreen() {
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
       <EnterpriseHeader
         onBack
-        icon="message-circle"
-        title="WhatsApp Inbox"
+        icon={instagram ? 'instagram' : 'message-circle'}
+        title={instagram ? 'Instagram Inbox' : 'WhatsApp Inbox'}
         badge="CRM"
         subtitle={
           totalUnread > 0
             ? `${totalUnread} unread message${totalUnread === 1 ? '' : 's'}`
-            : 'Customer conversations from WhatsApp'
+            : instagram ? 'Instagram direct messages' : 'Customer conversations from WhatsApp'
         }
         right={
           <HeaderAction icon="refresh-cw" onPress={onRefresh} color={refreshing ? '#a5b4fc' : '#ffffff'} />

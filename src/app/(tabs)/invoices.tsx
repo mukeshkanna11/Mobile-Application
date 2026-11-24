@@ -129,6 +129,7 @@ export default function InvoicesScreen() {
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
       <EnterpriseHeader
+        onBack
         icon="file-text"
         title="Invoice Management"
         badge="ReadyTech Solutions"

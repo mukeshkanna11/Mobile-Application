@@ -132,6 +132,7 @@ export default function UsersScreen() {
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
       {/* Enterprise gradient header + KPIs */}
       <EnterpriseHeader
+        onBack
         icon="users"
         title="User & Access Management"
         badge="ReadyTech Solutions"

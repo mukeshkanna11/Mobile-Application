@@ -151,6 +151,7 @@ export default function LeadsScreen() {
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
       {/* Enterprise gradient header + KPIs */}
       <EnterpriseHeader
+        onBack
         icon="users"
         title="Lead Management"
         badge="ReadyTech Solutions"

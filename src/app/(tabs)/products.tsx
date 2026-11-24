@@ -108,6 +108,7 @@ export default function ProductsScreen() {
   return (
     <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
       <EnterpriseHeader
+        onBack
         icon="package"
         title="CRM Products"
         badge="ReadyTech Solutions"

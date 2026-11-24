@@ -30,6 +30,8 @@ export interface MetaStatus {
   };
   facebookPage?: { connected?: boolean; name?: string; id?: string; tokenPresent?: boolean };
   instagram?: { connected?: boolean; username?: string; name?: string; id?: string };
+  /** Workspace Instagram DM connection (web Instagram Inbox) — full shape in services/integrations.ts */
+  instagramInbox?: { connected?: boolean; username?: string | null } | null;
   whatsapp?: {
     connected?: boolean;
     displayPhoneNumber?: string;

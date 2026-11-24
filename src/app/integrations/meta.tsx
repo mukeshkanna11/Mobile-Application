@@ -1,12 +1,12 @@
 import { Feather } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import * as WebBrowser from 'expo-web-browser';
 import { useCallback, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, RefreshControl, ScrollView, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import EnterpriseHeader from '@/components/ui/EnterpriseHeader';
 import { LoadingState, MessageState } from '@/components/ui/StateView';
+import { openOAuth, subscribeMetaPage } from '@/services/integrations';
 import {
   disconnectMeta,
   fetchMetaOAuthUrl,
@@ -19,7 +19,7 @@ import {
 } from '@/services/meta';
 
 type FeatherName = keyof typeof Feather.glyphMap;
-type Busy = '' | 'connect' | 'refresh' | 'disconnect' | 'wa-sync';
+type Busy = '' | 'connect' | 'refresh' | 'disconnect' | 'wa-sync' | 'page-sub';
 
 /** Meta Integration — mobile port of web pages/Integrations/MetaIntegration.jsx. */
 export default function MetaIntegrationScreen() {
@@ -60,14 +60,14 @@ export default function MetaIntegrationScreen() {
     }
   };
 
-  // OAuth finishes on the web app (backend CLIENT_URL), so re-read status on return.
+  // OAuth finishes server-side; the auth session returns to the app, then status is re-read.
   const connect = () =>
     run(
       'connect',
       async () => {
         const url = await fetchMetaOAuthUrl();
         if (!url) throw new Error('No OAuth URL');
-        await WebBrowser.openBrowserAsync(url);
+        await openOAuth(url);
         await load();
       },
       'Could not start the Meta connection.'
@@ -198,6 +198,30 @@ export default function MetaIntegrationScreen() {
               ['Page token', status?.facebookPage?.tokenPresent ? 'Stored securely' : '—'],
             ]}
           />
+          {status?.facebookPage?.connected ? (
+            <View className="mb-4 rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+              <Text className="text-sm font-semibold text-slate-900">Messenger & Instagram DMs</Text>
+              <Text className="mb-3 mt-1 text-xs text-slate-500">
+                Subscribe {status.facebookPage.name || 'the Page'} to this app&apos;s webhook so DMs reach the Unified Inbox.
+              </Text>
+              <ActionButton
+                icon="bell"
+                label="Subscribe Page"
+                busy={busy === 'page-sub'}
+                disabled={!!busy}
+                onPress={() =>
+                  run(
+                    'page-sub',
+                    async () => {
+                      await subscribeMetaPage();
+                      Alert.alert('Meta Integration', 'Page subscribed to webhook');
+                    },
+                    'Could not subscribe the Page.'
+                  )
+                }
+              />
+            </View>
+          ) : null}
           <AssetCard
             icon="at-sign"
             color="#db2777"

@@ -9,7 +9,6 @@ import QuickAction from '@/components/ui/QuickAction';
 import StatCard from '@/components/ui/StatCard';
 import { LoadingState, MessageState } from '@/components/ui/StateView';
 
-import { logout } from '@/services/auth';
 import { fetchDashboard, type DashboardData } from '@/services/dashboard';
 
 type FeatherName = ComponentProps<typeof Feather>['name'];
@@ -333,15 +332,6 @@ export default function DashboardScreen() {
     load();
   }, [load]);
 
-  const handleLogout = async () => {
-    try {
-      await logout();
-      router.replace('/');
-    } catch (err) {
-      console.log('Logout error:', err);
-    }
-  };
-
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-slate-50" edges={['top']}>
@@ -406,11 +396,13 @@ export default function DashboardScreen() {
               <Text className="mt-2 text-2xl font-bold text-white">Executive Dashboard</Text>
             </View>
             <Pressable
-              onPress={handleLogout}
+              onPress={() => router.push('/more')}
               hitSlop={6}
-              className="h-10 w-10 items-center justify-center rounded-xl bg-white/10 active:opacity-80"
+              accessibilityRole="button"
+              accessibilityLabel="Open menu"
+              className="h-10 w-10 items-center justify-center rounded-xl border border-white/15 bg-white/10 active:opacity-80"
             >
-              <Feather name="log-out" size={18} color="white" />
+              <Feather name="menu" size={18} color="white" />
             </Pressable>
           </View>
 

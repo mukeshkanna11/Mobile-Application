@@ -87,11 +87,13 @@ export async function fetchConversations({
   limit = 20,
   search = '',
   unread = false,
-}: { page?: number; limit?: number; search?: string; unread?: boolean } = {}) {
+  channel = '',
+}: { page?: number; limit?: number; search?: string; unread?: boolean; channel?: '' | 'whatsapp' | 'instagram' } = {}) {
   const { data } = await API.get('/whatsapp/conversations', {
     params: {
       page,
       limit,
+      ...(channel ? { channel } : {}),
       ...(search.trim() ? { search: search.trim() } : {}),
       ...(unread ? { unread: 'true' } : {}),
     },

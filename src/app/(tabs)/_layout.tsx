@@ -1,64 +1,20 @@
-import { Feather } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
-import type { ColorValue } from 'react-native';
+import { Stack } from 'expo-router';
 
-type FeatherName = keyof typeof Feather.glyphMap;
+/* No bottom tab bar: the same routes (/dashboard, /clients, /leads, /products,
+   /users, /invoices, /more) are stacked screens reached from the full-screen
+   Menu (/more). Dashboard stays the landing screen. */
+export const unstable_settings = { initialRouteName: 'dashboard' };
 
-const tabIcon = (name: FeatherName) => {
-  const TabIcon = ({ color, size }: { color: ColorValue; size: number }) => (
-    <Feather name={name} size={size} color={color} />
-  );
-  TabIcon.displayName = `TabIcon(${name})`;
-  return TabIcon;
-};
-
-export default function TabsLayout() {
+export default function MainLayout() {
   return (
-    <Tabs
-      screenOptions={{
-        headerShown: false,
-        tabBarActiveTintColor: '#4f46e5',
-        tabBarInactiveTintColor: '#94a3b8',
-        tabBarLabelStyle: { fontSize: 11, fontWeight: '500' },
-        tabBarStyle: {
-          borderTopColor: '#e2e8f0',
-          height: 62,
-          paddingTop: 6,
-          paddingBottom: 8,
-        },
-      }}
-    >
-      <Tabs.Screen
-        name="dashboard"
-        options={{ title: 'Dashboard', tabBarIcon: tabIcon('grid') }}
-      />
-      <Tabs.Screen
-        name="clients"
-        options={{ title: 'Clients', tabBarIcon: tabIcon('users') }}
-      />
-      <Tabs.Screen
-        name="leads"
-        options={{ title: 'Leads', tabBarIcon: tabIcon('target') }}
-      />
-      <Tabs.Screen
-        name="products"
-        options={{ title: 'Products', tabBarIcon: tabIcon('package') }}
-      />
-      {/* Hidden from the tab bar (href: null) but still routable as /users; opened from More. */}
-      <Tabs.Screen
-        name="users"
-        options={{ title: 'Users', tabBarIcon: tabIcon('user-check'), href: null }}
-      />
-      {/* Hidden from the tab bar (href: null) but still routable as /invoices; opened from More. */}
-      <Tabs.Screen
-        name="invoices"
-        options={{ title: 'Invoices', tabBarIcon: tabIcon('file-text'), href: null }}
-      />
-      <Tabs.Screen
-        name="more"
-        options={{ title: 'More', tabBarIcon: tabIcon('grid') }}
-      />
-
-    </Tabs>
+    <Stack screenOptions={{ headerShown: false, animation: 'slide_from_right' }}>
+      <Stack.Screen name="dashboard" options={{ animation: 'fade' }} />
+      <Stack.Screen name="clients" />
+      <Stack.Screen name="leads" />
+      <Stack.Screen name="products" />
+      <Stack.Screen name="users" />
+      <Stack.Screen name="invoices" />
+      <Stack.Screen name="more" />
+    </Stack>
   );
 }

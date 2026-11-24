@@ -1,3 +1,6 @@
+import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
+
 import API from '@/services/api';
 
 /**
@@ -9,7 +12,8 @@ import API from '@/services/api';
  *   WhatsApp   POST /whatsapp/connect {phoneNumberId,wabaId,accessToken} · POST /whatsapp/disconnect · POST /whatsapp/sync
  *   Email      GET /email/status · GET /email/oauth/:provider/url · POST /email/smtp · PUT /email/accounts/:id/smtp
  *              POST /email/accounts/:id/{default,test} · DELETE /email/accounts/:id
- *   Shopify    GET /shopify/status · POST /shopify/disconnect
+ *   Shopify    GET /shopify/status · GET /shopify/oauth/url?shop · POST /shopify/disconnect
+ *              /shopify/inventory/{locations,preview,settings,sync} · /shopify/events · POST /shopify/webhooks/register
  *   Meta Page  POST /meta/subscribe-page
  */
 
@@ -18,6 +22,24 @@ export const apiMessage = (err: unknown, fallback: string): string => {
   if (res?.status === 403) return 'Only admins can manage this integration.';
   return res?.data?.message || fallback;
 };
+
+/* --------------------------- OAuth (all providers) --------------------------- */
+/** App link the auth session listens for: mobileapplication://integrations */
+export const OAUTH_RETURN_URL = Linking.createURL('integrations');
+
+/**
+ * Opens a provider sign-in in an in-app auth session. The backend callback
+ * finishes the connection server-side (state is bound to this admin + workspace)
+ * and then shows the web result page; closing it — or an app link back —
+ * resolves this promise so the caller re-reads the real status from the API.
+ */
+export async function openOAuth(url: string): Promise<void> {
+  try {
+    await WebBrowser.openAuthSessionAsync(url, OAUTH_RETURN_URL);
+  } finally {
+    WebBrowser.dismissAuthSession();
+  }
+}
 
 /* ------------------------------ Instagram ------------------------------ */
 export interface InstagramStatus {
@@ -104,10 +126,38 @@ export async function fetchEmailStatus(): Promise<EmailStatus> {
   return { providers: data?.data?.providers ?? [], accounts: data?.data?.accounts ?? [] };
 }
 
-export async function emailOAuthUrl(provider: string): Promise<string | undefined> {
-  const { data } = await API.get(`/email/oauth/${provider}/url`);
+/** `hint` pre-fills the provider sign-in; `inbox` adds read-only inbox access (web "Enable inbox sync"). */
+export async function emailOAuthUrl(provider: string, opts: { hint?: string; inbox?: boolean } = {}): Promise<string | undefined> {
+  const { data } = await API.get(`/email/oauth/${provider}/url`, {
+    params: { ...(opts.hint ? { email: opts.hint } : {}), ...(opts.inbox ? { inbox: '1' } : {}) },
+  });
   return data?.data?.url;
 }
+
+export interface MailSettings {
+  label?: string;
+  smtp?: { host?: string; port?: number; security?: string };
+  imap?: { host?: string; port?: number; security?: string } | null;
+}
+
+/** Same as the web "Continue" step: which provider owns this address (+ SMTP/IMAP suggestion). */
+export async function detectEmailProvider(email: string): Promise<{ provider: string | null; available: boolean | null; settings?: MailSettings }> {
+  const { data } = await API.get('/email/detect', { params: { email } });
+  return data?.data ?? { provider: null, available: null };
+}
+
+/** SMTP form pre-filled from a detected custom-domain suggestion. */
+export const smtpFromSuggestion = (email: string, s?: MailSettings): SmtpForm => ({
+  ...emptySmtp(),
+  email,
+  host: s?.smtp?.host ?? '',
+  port: String(s?.smtp?.port ?? 465),
+  security: (s?.smtp?.security as SmtpForm['security']) ?? 'ssl',
+  imapEnabled: !!s?.imap,
+  imapHost: s?.imap?.host ?? '',
+  imapPort: String(s?.imap?.port ?? 993),
+  imapSecurity: (s?.imap?.security as SmtpForm['imapSecurity']) ?? 'ssl',
+});
 
 export interface SmtpForm {
   email: string;
@@ -178,9 +228,94 @@ export interface ShopifyStatus {
     missingScopes?: string[];
     connectedAt?: string | null;
     lastError?: string | null;
+    webhooks?: { registered?: string[]; lastError?: string | null } | null;
+    inventory?: ShopifyInventorySettings | null;
   } | null;
-  orders?: Record<string, unknown> | null;
-  inventory?: Record<string, unknown> | null;
+  installUrl?: string | null;
+  orders?: { total?: number; needsAttention?: number; recent?: ShopifyOrder[] } | null;
+  inbox?: { counts?: Record<string, number> } | null;
+}
+
+export interface ShopifyOrder {
+  _id: string;
+  orderName?: string;
+  status?: string;
+  financialStatus?: string;
+  salesOrder?: { soNumber?: string; status?: string } | null;
+  financials?: { total: number; digits: number; currency?: string; outstanding?: number } | null;
+  issues?: string[];
+}
+
+export interface ShopifyInventorySettings {
+  enabled?: boolean;
+  warehouse?: string | null;
+  locationGid?: string | null;
+  locationName?: string | null;
+  lastSyncAt?: string | null;
+  lastError?: string | null;
+}
+
+export interface ShopifyEvent {
+  _id: string;
+  topic?: string;
+  status?: string;
+  attempts?: number;
+  lastError?: string | null;
+  createdAt?: string;
+}
+
+/* Integer minor units → "1180.00 INR" (same as the web page) */
+export const shopifyMoney = (minor = 0, digits = 2, currency = '') => {
+  const abs = String(Math.abs(minor)).padStart(digits + 1, '0');
+  const value = digits ? `${abs.slice(0, -digits)}.${abs.slice(-digits)}` : abs;
+  return `${minor < 0 ? '-' : ''}${value} ${currency}`.trim();
+};
+
+/* Store address → "<handle>.myshopify.com" (web components/shopify/storeInput.js; backend validates again) */
+export function normalizeShopInput(input: string): string | null {
+  const raw = String(input || '').trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '');
+  const admin = raw.match(/^admin\.shopify\.com\/store\/([a-z0-9][a-z0-9-]*)(?:[/?#]|$)/);
+  let shop = admin ? `${admin[1]}.myshopify.com` : raw.replace(/[/?#].*$/, '');
+  if (shop && !shop.includes('.')) shop = `${shop}.myshopify.com`;
+  return /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop) ? shop : null;
+}
+
+export async function shopifyOAuthUrl(shop: string): Promise<string | undefined> {
+  const { data } = await API.get('/shopify/oauth/url', { params: { shop } });
+  return data?.data?.url;
+}
+
+export async function fetchShopifyLocations(): Promise<{ id: string; name: string }[]> {
+  const { data } = await API.get('/shopify/inventory/locations');
+  return data?.data ?? [];
+}
+
+export async function previewShopifyInventory(): Promise<{ totals?: Record<string, number> } | null> {
+  const { data } = await API.get('/shopify/inventory/preview');
+  return data?.data ?? null;
+}
+
+export async function saveShopifyInventory(input: { enabled: boolean; warehouse: string | null; locationGid: string | null }): Promise<string | undefined> {
+  const { data } = await API.put('/shopify/inventory/settings', input);
+  return data?.message;
+}
+
+export async function syncShopifyInventory(): Promise<string | undefined> {
+  const { data } = await API.post('/shopify/inventory/sync');
+  const mapped = data?.data?.mapping?.mapped;
+  return `${data?.message || 'Inventory synced'}${mapped != null ? ` · ${mapped} SKU(s) matched` : ''}`;
+}
+
+export async function fetchShopifyEvents(page = 1): Promise<{ items: ShopifyEvent[]; total?: number; pages?: number }> {
+  const { data } = await API.get('/shopify/events', { params: { page, limit: 20 } });
+  return data?.data ?? { items: [] };
+}
+
+export const retryShopifyEvent = (id: string) => API.post(`/shopify/events/${id}/retry`);
+
+export async function registerShopifyWebhooks(): Promise<string | undefined> {
+  const { data } = await API.post('/shopify/webhooks/register');
+  return data?.message;
 }
 
 export async function fetchShopifyStatus(): Promise<ShopifyStatus> {

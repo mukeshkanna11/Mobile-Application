@@ -26,7 +26,7 @@ const paperTheme = {
 export default function RootLayout() {
   // Preload the icon fonts the app uses (Feather via @expo/vector-icons and
   // MaterialCommunityIcons via react-native-paper). This awaits/handles the
-  // load instead of letting an icon trigger a lazy, uncaught web font load —
+  // load instead of letting an icon trigger a lazy, uncaught web font load —a
   // which was surfacing as the fontfaceobserver "12000ms timeout" error.
   const [fontsReady, fontError] = useFonts({
     ...Feather.font,
